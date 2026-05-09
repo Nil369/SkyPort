@@ -1,0 +1,25 @@
+SkyPort — Licensing & Edition Notice
+====================================
+
+SkyPort Community Edition is open-source software. The project welcomes
+contributions, forks, and self-hosted deployments under the terms of the
+GNU Affero General Public License v3.0 (AGPL-3.0). See the LICENSE file
+in this repository.
+
+Akash Halder Technologia may offer optional Pro or Enterprise editions,
+add-ons, hosted services, or complementary products in the future. Such
+offerings may include closed-source components, commercial licensing, or
+features not present in the community repository. When that happens,
+those components will be clearly labeled and distributed separately from
+the AGPL-licensed community codebase.
+
+The community edition of SkyPort is intended to remain available under a
+strong copyleft license so that self-hosters, students, and teams on
+modest infrastructure can adopt it without losing access to source code
+or the ability to improve the platform together.
+
+This NOTICE does not modify the AGPL-3.0; it only clarifies how future
+commercial offerings may relate to the open-source project.
+
+For questions about licensing or editions, please open a discussion on
+the project’s GitHub repository.

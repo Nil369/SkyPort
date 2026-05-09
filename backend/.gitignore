@@ -1,0 +1,14 @@
+# Build artifacts
+/bin/
+/dist/
+*.exe
+*.test
+
+# Local data (SQLite)
+/data/
+*.db
+*.db-shm
+*.db-wal
+
+# Env files (keep .env.example in repo)
+.env
