@@ -54,7 +54,7 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("SKYPORT_SHUTDOWN_TIMEOUT_SEC: %w", err)
 	}
-	jwtExpiresSec, err := strconv.Atoi(getEnv("JWT_EXPIRES", "3600"))
+	jwtExpiresSec, err := strconv.Atoi(getEnv("JWT_EXPIRES", "604800"))
 	if err != nil {
 		return nil, fmt.Errorf("JWT_EXPIRES: %w", err)
 	}

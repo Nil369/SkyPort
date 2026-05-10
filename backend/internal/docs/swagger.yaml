@@ -65,6 +65,23 @@ definitions:
     required:
     - action
     type: object
+  internal_filesystem.createFileRequest:
+    properties:
+      content:
+        maxLength: 10000000
+        type: string
+      filename:
+        maxLength: 255
+        type: string
+      path:
+        maxLength: 2048
+        type: string
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - path
+    type: object
   internal_filesystem.createFolderRequest:
     properties:
       path:
@@ -93,12 +110,38 @@ definitions:
     - new_path
     - old_path
     type: object
+  internal_filesystem.writeFileRequest:
+    properties:
+      content:
+        maxLength: 10000000
+        type: string
+      encoding:
+        enum:
+        - utf8
+        - base64
+        type: string
+      filename:
+        maxLength: 255
+        type: string
+      path:
+        maxLength: 2048
+        type: string
+      title:
+        maxLength: 255
+        type: string
+    required:
+    - content
+    - path
+    type: object
   internal_projects.createProjectRequest:
     properties:
       git_auth_type:
         enum:
         - ssh
         - pat
+        type: string
+      git_branch:
+        maxLength: 255
         type: string
       git_pat:
         type: string
@@ -116,7 +159,12 @@ definitions:
     required:
     - name
     type: object
-  models.Project:
+  internal_system.gitInstallRequest:
+    properties:
+      execute:
+        type: boolean
+    type: object
+  skyport_internal_models.Project:
     properties:
       createdAt:
         type: string
@@ -133,146 +181,30 @@ definitions:
       updatedAt:
         type: string
     type: object
-  response.APIError:
+  skyport_internal_response.APIError:
     properties:
       code:
         type: string
-      details:
-        type: any
+      details: {}
       message:
         type: string
       request_id:
         type: string
     type: object
-  response.ErrorBody:
+  skyport_internal_response.ErrorBody:
     properties:
       error:
-        $ref: '#/definitions/response.APIError'
-    type: object
-  skyport_internal_auth.AuthResponse:
-    properties:
-      access_token:
-        type: string
-      expires_at:
-        type: string
-      refresh_token:
-        description: Future-ready placeholder; currently not issued.
-        type: string
-      token_type:
-        type: string
-      user:
-        $ref: '#/definitions/skyport_internal_auth.UserDTO'
-    type: object
-  skyport_internal_auth.LoginRequest:
-    properties:
-      email:
-        maxLength: 255
-        type: string
-      password:
-        maxLength: 128
-        minLength: 8
-        type: string
-    required:
-    - email
-    - password
-    type: object
-  skyport_internal_auth.RegisterRequest:
-    properties:
-      email:
-        maxLength: 255
-        type: string
-      name:
-        maxLength: 120
-        minLength: 2
-        type: string
-      password:
-        maxLength: 128
-        minLength: 8
-        type: string
-    required:
-    - email
-    - name
-    - password
-    type: object
-  skyport_internal_auth.UserDTO:
-    properties:
-      email:
-        type: string
-      id:
-        type: integer
-      name:
-        type: string
-    type: object
-  skyport_internal_docker.daemonRequest:
-    properties:
-      action:
-        enum:
-        - start
-        - stop
-        - restart
-        type: string
-    required:
-    - action
-    type: object
-  skyport_internal_filesystem.createFolderRequest:
-    properties:
-      path:
-        maxLength: 2048
-        type: string
-    required:
-    - path
-    type: object
-  skyport_internal_filesystem.readFileRequest:
-    properties:
-      path:
-        maxLength: 2048
-        type: string
-    required:
-    - path
-    type: object
-  skyport_internal_filesystem.renameRequest:
-    properties:
-      new_path:
-        maxLength: 2048
-        type: string
-      old_path:
-        maxLength: 2048
-        type: string
-    required:
-    - new_path
-    - old_path
-    type: object
-  skyport_internal_projects.createProjectRequest:
-    properties:
-      git_auth_type:
-        enum:
-        - ssh
-        - pat
-        type: string
-      git_pat:
-        type: string
-      git_ssh_key:
-        type: string
-      git_url:
-        maxLength: 1024
-        type: string
-      name:
-        maxLength: 120
-        minLength: 2
-        type: string
-      private:
-        type: boolean
-    required:
-    - name
+        $ref: '#/definitions/skyport_internal_response.APIError'
     type: object
 host: localhost
 info:
   contact:
-    email: support@skyport.example
-    name: SkyPort Maintainers
-  description: 'Provide the JWT token as: Bearer <token>'
+    name: Akash Halder
+    url: https://github.com/Nil369
+  description: Lightweight self-hosted developer cloud platform API
   license:
-    name: MIT
+    name: AGPL-3.0
+    url: https://www.gnu.org/licenses/agpl-3.0.en.html
   title: SkyPort API
   version: 0.0.1
 paths:
@@ -312,17 +244,17 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Login
       tags:
       - Auth
   /api/v1/auth/logout:
     post:
-      description: Logout (placeholder)
+      description: Logout and revoke current token
       produces:
       - application/json
       responses:
@@ -331,6 +263,12 @@ paths:
           schema:
             additionalProperties: true
             type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
       summary: Logout
       tags:
       - Auth
@@ -347,7 +285,7 @@ paths:
         "401":
           description: Unauthorized
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       security:
       - BearerAuth: []
       summary: Current user
@@ -375,11 +313,11 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
         "409":
           description: Conflict
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Register user
       tags:
       - Auth
@@ -500,6 +438,68 @@ paths:
       summary: Control Docker daemon
       tags:
       - Docker
+  /api/v1/docker/image/{name}:
+    delete:
+      description: Delete a Docker image by name or ID
+      parameters:
+      - description: Image name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete image
+      tags:
+      - Docker
+  /api/v1/docker/images:
+    get:
+      description: List local Docker images
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List images
+      tags:
+      - Docker
+  /api/v1/docker/images/prune:
+    post:
+      description: Prune unused Docker images
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Prune images
+      tags:
+      - Docker
+  /api/v1/docker/install:
+    post:
+      description: Detects host OS and returns recommended Docker install command
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Docker install helper
+      tags:
+      - Docker
   /api/v1/docker/start:
     post:
       description: Start the Docker daemon
@@ -542,6 +542,54 @@ paths:
       summary: Stop Docker daemon
       tags:
       - Docker
+  /api/v1/docker/volume/{name}:
+    delete:
+      description: Delete Docker volume by name
+      parameters:
+      - description: Volume name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete volume
+      tags:
+      - Docker
+  /api/v1/docker/volumes:
+    get:
+      description: List local Docker volumes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List volumes
+      tags:
+      - Docker
+  /api/v1/docker/volumes/prune:
+    post:
+      description: Prune unused Docker volumes
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Prune volumes
+      tags:
+      - Docker
   /api/v1/files:
     delete:
       description: Deletes the file or folder at an absolute path
@@ -562,14 +610,15 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Delete file or folder
       tags:
       - Filesystem
     get:
       description: List files and folders at an absolute path on the VPS
       parameters:
-      - description: Absolute path on VPS (e.g., /home, C:\\Users on Windows)
+      - description: Absolute path on VPS (use / on Linux, and G:/folder or escaped
+          G:\\\\folder in JSON)
         in: query
         name: path
         required: true
@@ -585,7 +634,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: List files
       tags:
       - Filesystem
@@ -608,8 +657,36 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Download file
+      tags:
+      - Filesystem
+  /api/v1/files/file:
+    post:
+      consumes:
+      - application/json
+      description: Create file at absolute path; creates parent directories automatically
+      parameters:
+      - description: Create file payload (path may be file or folder; filename/title
+          optional)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_filesystem.createFileRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      summary: Create file
       tags:
       - Filesystem
   /api/v1/files/folder:
@@ -618,12 +695,13 @@ paths:
       - application/json
       description: Create a folder at an absolute path on the VPS
       parameters:
-      - description: Create folder payload
+      - description: Create folder payload (use forward slashes or escaped backslashes
+          on Windows)
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/skyport_internal_filesystem.createFolderRequest'
+          $ref: '#/definitions/internal_filesystem.createFolderRequest'
       produces:
       - application/json
       responses:
@@ -636,7 +714,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Create folder
       tags:
       - Filesystem
@@ -651,7 +729,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/skyport_internal_filesystem.readFileRequest'
+          $ref: '#/definitions/internal_filesystem.readFileRequest'
       produces:
       - application/json
       responses:
@@ -663,7 +741,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Read file
       tags:
       - Filesystem
@@ -678,7 +756,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/skyport_internal_filesystem.renameRequest'
+          $ref: '#/definitions/internal_filesystem.renameRequest'
       produces:
       - application/json
       responses:
@@ -690,7 +768,7 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Rename file or folder
       tags:
       - Filesystem
@@ -721,8 +799,35 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Upload file
+      tags:
+      - Filesystem
+  /api/v1/files/write:
+    put:
+      consumes:
+      - application/json
+      description: Overwrite file content at absolute path using utf8 or base64 payload
+      parameters:
+      - description: Write file payload (if path is folder, filename/title is used)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_filesystem.writeFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      summary: Write file
       tags:
       - Filesystem
   /api/v1/health:
@@ -753,10 +858,10 @@ paths:
         "503":
           description: Service Unavailable
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Metrics snapshot
       tags:
-      - Websocket
+      - System
   /api/v1/projects:
     get:
       description: Returns list of projects
@@ -767,7 +872,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/models.Project'
+              $ref: '#/definitions/skyport_internal_models.Project'
             type: array
       summary: List projects
       tags:
@@ -783,18 +888,18 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/skyport_internal_projects.createProjectRequest'
+          $ref: '#/definitions/internal_projects.createProjectRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.Project'
+            $ref: '#/definitions/skyport_internal_models.Project'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Create project
       tags:
       - Projects
@@ -818,10 +923,51 @@ paths:
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/response.ErrorBody'
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Delete project
       tags:
       - Projects
+  /api/v1/system/git/install:
+    post:
+      consumes:
+      - application/json
+      description: Returns OS-specific git install command and optionally executes
+        it when execute=true
+      parameters:
+      - description: Install request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_system.gitInstallRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      summary: Install git
+      tags:
+      - System
+  /api/v1/system/git/status:
+    get:
+      description: Returns whether git is installed and its version
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Git status
+      tags:
+      - System
   /api/v1/system/info:
     get:
       description: Returns host and runtime information (OS, memory, cpu, uptime)
@@ -859,6 +1005,7 @@ schemes:
 - http
 securityDefinitions:
   BearerAuth:
+    description: 'Provide the JWT token as: Bearer <token>'
     in: header
     name: Authorization
     type: apiKey

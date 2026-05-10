@@ -53,7 +53,7 @@ func Run(cfg *config.Config) error {
 
 	log.Printf("==============================================")
 	log.Printf(" SkyPort API %s", version.Version)
-	log.Printf(" env=%s listen=http://%s db=%s", cfg.Environment, cfg.Addr(), cfg.DBPath)
+	log.Printf(" env=%s listen=%s db=%s", cfg.Environment, displayListenURL(cfg), cfg.DBPath)
 	log.Printf(" modules: terminal=%t metrics=%t docker=%t filesystem=%t projects=%t",
 		cfg.EnableTerminal, cfg.EnableMetrics, cfg.EnableDocker, cfg.EnableFilesystem, cfg.EnableProjects)
 	log.Printf(" routes: GET / | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
@@ -163,6 +163,14 @@ func swaggerHost(cfg *config.Config) string {
 		host = "127.0.0.1"
 	}
 	return fmt.Sprintf("%s:%d", host, cfg.Port)
+}
+
+func displayListenURL(cfg *config.Config) string {
+	host := strings.TrimSpace(cfg.Host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "localhost"
+	}
+	return fmt.Sprintf("http://%s:%d", host, cfg.Port)
 }
 
 func mergeAllowedOrigins(cfg *config.Config) []string {

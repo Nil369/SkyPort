@@ -57,6 +57,7 @@ type HostSnapshot struct {
 type HostInfo struct {
 	Hostname      string `json:"hostname"`
 	UptimeSeconds uint64 `json:"uptime_seconds"`
+	UptimeHuman   string `json:"uptime_human"`
 }
 
 // CPUStats holds normalized CPU figures for dashboards.
@@ -68,8 +69,11 @@ type CPUStats struct {
 // MemStats mirrors OS virtual memory (RAM) usage.
 type MemStats struct {
 	TotalBytes  uint64  `json:"total_bytes"`
+	TotalHuman  string  `json:"total_human"`
 	UsedBytes   uint64  `json:"used_bytes"`
+	UsedHuman   string  `json:"used_human"`
 	FreeBytes   uint64  `json:"free_bytes"`
+	FreeHuman   string  `json:"free_human"`
 	UsedPercent float64 `json:"used_percent"`
 }
 
@@ -77,7 +81,10 @@ type MemStats struct {
 type DiskStats struct {
 	Path        string  `json:"path"`
 	TotalBytes  uint64  `json:"total_bytes"`
+	TotalHuman  string  `json:"total_human"`
 	UsedBytes   uint64  `json:"used_bytes"`
+	UsedHuman   string  `json:"used_human"`
 	FreeBytes   uint64  `json:"free_bytes"`
+	FreeHuman   string  `json:"free_human"`
 	UsedPercent float64 `json:"used_percent"`
 }

@@ -65,17 +65,25 @@ func loginHandler(svc *Service) fiber.Handler {
 	}
 }
 
-// logoutHandler is a placeholder for logout actions.
+// logoutHandler revokes the active token for current user.
 // @Summary Logout
 // @Tags Auth
-// @Description Logout (placeholder)
+// @Description Logout and revoke current token
 // @Produce json
 // @Success 200 {object} map[string]any
+// @Failure 401 {object} response.ErrorBody
+// @Security BearerAuth
 // @Router /api/v1/auth/logout [post]
-func logoutHandler() fiber.Handler {
+func logoutHandler(svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// Placeholder for refresh-token invalidation and cookie clearing.
-		return response.OK(c, fiber.Map{"success": true, "message": "logout placeholder"})
+		userID, err := userIDFromCtx(c)
+		if err != nil {
+			return response.Unauthorized(c, "unauthorized")
+		}
+		if err := svc.Logout(userID); err != nil {
+			return err
+		}
+		return response.OK(c, fiber.Map{"success": true, "message": "logged out"})
 	}
 }
 

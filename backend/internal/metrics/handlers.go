@@ -3,13 +3,16 @@ package metrics
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 
 	"skyport/internal/app"
+	"skyport/internal/auth"
 	"skyport/internal/response"
+	wsinfra "skyport/internal/websocket"
 )
 
 const (
@@ -50,7 +53,23 @@ func metricsHandler(a *app.App) fiber.Handler {
 // disconnects or WriteMessage fails, the handler returns, defer stops the ticker, and
 // the library releases the pooled Conn (no leaked tickers or goroutines).
 func registerWebSocket(a *app.App) {
-	a.Fiber.Get("/ws/metrics", websocket.New(metricsWebSocketHandler(a)))
+	a.Fiber.Use("/ws/metrics", func(c *fiber.Ctx) error {
+		connHdr := strings.ToLower(c.Get("Connection"))
+		upgHdr := strings.ToLower(c.Get("Upgrade"))
+		if strings.Contains(connHdr, "upgrade") && strings.Contains(upgHdr, "websocket") {
+			token := wsinfra.ExtractToken(c)
+			if token == "" {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			if _, err := auth.ParseAccessToken(token, a.Config.JWTSecret); err != nil {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+		}
+		return c.Next()
+	})
+	a.Fiber.Get("/ws/metrics", websocket.New(metricsWebSocketHandler(a), websocket.Config{
+		Subprotocols: []string{"jwt"},
+	}))
 }
 
 // metricsWebSocketHandler streams periodic metrics snapshots over WebSocket.

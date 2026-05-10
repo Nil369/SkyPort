@@ -4,10 +4,15 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Provide the JWT token as: Bearer \u003ctoken\u003e",
+        "description": "Lightweight self-hosted developer cloud platform API",
         "title": "SkyPort API",
+        "contact": {
+            "name": "Akash Halder",
+            "url": "https://github.com/Nil369"
+        },
         "license": {
-            "name": "GNU AGPL-3.0"
+            "name": "AGPL-3.0",
+            "url": "https://www.gnu.org/licenses/agpl-3.0.en.html"
         },
         "version": "0.0.1"
     },
@@ -69,13 +74,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -83,7 +88,12 @@
         },
         "/api/v1/auth/logout": {
             "post": {
-                "description": "Logout (placeholder)",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Logout and revoke current token",
                 "produces": [
                     "application/json"
                 ],
@@ -97,6 +107,12 @@
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -127,7 +143,7 @@
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -167,13 +183,13 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     },
                     "409": {
                         "description": "Conflict",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -355,6 +371,99 @@
                 }
             }
         },
+        "/api/v1/docker/image/{name}": {
+            "delete": {
+                "description": "Delete a Docker image by name or ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Delete image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image name or ID",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/docker/images": {
+            "get": {
+                "description": "List local Docker images",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "List images",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/docker/images/prune": {
+            "post": {
+                "description": "Prune unused Docker images",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Prune images",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/docker/install": {
+            "post": {
+                "description": "Detects host OS and returns recommended Docker install command",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Docker install helper",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/docker/start": {
             "post": {
                 "description": "Start the Docker daemon",
@@ -418,6 +527,78 @@
                 }
             }
         },
+        "/api/v1/docker/volume/{name}": {
+            "delete": {
+                "description": "Delete Docker volume by name",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Delete volume",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Volume name",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/docker/volumes": {
+            "get": {
+                "description": "List local Docker volumes",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "List volumes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/docker/volumes/prune": {
+            "post": {
+                "description": "Prune unused Docker volumes",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Prune volumes",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/files": {
             "get": {
                 "description": "List files and folders at an absolute path on the VPS",
@@ -431,7 +612,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Absolute path on VPS (e.g., /home, C:\\\\Users on Windows)",
+                        "description": "Absolute path on VPS (use / on Linux, and G:/folder or escaped G:\\\\\\\\folder in JSON)",
                         "name": "path",
                         "in": "query",
                         "required": true
@@ -448,7 +629,7 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -482,7 +663,7 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -517,7 +698,48 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files/file": {
+            "post": {
+                "description": "Create file at absolute path; creates parent directories automatically",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Filesystem"
+                ],
+                "summary": "Create file",
+                "parameters": [
+                    {
+                        "description": "Create file payload (path may be file or folder; filename/title optional)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_filesystem.createFileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -538,12 +760,12 @@
                 "summary": "Create folder",
                 "parameters": [
                     {
-                        "description": "Create folder payload",
+                        "description": "Create folder payload (use forward slashes or escaped backslashes on Windows)",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/skyport_internal_filesystem.createFolderRequest"
+                            "$ref": "#/definitions/internal_filesystem.createFolderRequest"
                         }
                     }
                 ],
@@ -560,7 +782,7 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -586,7 +808,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/skyport_internal_filesystem.readFileRequest"
+                            "$ref": "#/definitions/internal_filesystem.readFileRequest"
                         }
                     }
                 ],
@@ -601,7 +823,7 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -627,7 +849,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/skyport_internal_filesystem.renameRequest"
+                            "$ref": "#/definitions/internal_filesystem.renameRequest"
                         }
                     }
                 ],
@@ -642,7 +864,7 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -688,7 +910,48 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/files/write": {
+            "put": {
+                "description": "Overwrite file content at absolute path using utf8 or base64 payload",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Filesystem"
+                ],
+                "summary": "Write file",
+                "parameters": [
+                    {
+                        "description": "Write file payload (if path is folder, filename/title is used)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_filesystem.writeFileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -736,7 +999,7 @@
                     "503": {
                         "description": "Service Unavailable",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -758,7 +1021,7 @@
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/models.Project"
+                                "$ref": "#/definitions/skyport_internal_models.Project"
                             }
                         }
                     }
@@ -783,7 +1046,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/skyport_internal_projects.createProjectRequest"
+                            "$ref": "#/definitions/internal_projects.createProjectRequest"
                         }
                     }
                 ],
@@ -791,13 +1054,13 @@
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/models.Project"
+                            "$ref": "#/definitions/skyport_internal_models.Project"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -833,7 +1096,68 @@
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/response.ErrorBody"
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/system/git/install": {
+            "post": {
+                "description": "Returns OS-specific git install command and optionally executes it when execute=true",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Install git",
+                "parameters": [
+                    {
+                        "description": "Install request",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_system.gitInstallRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/system/git/status": {
+            "get": {
+                "description": "Returns whether git is installed and its version",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Git status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -975,6 +1299,30 @@
                 }
             }
         },
+        "internal_filesystem.createFileRequest": {
+            "type": "object",
+            "required": [
+                "path"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 10000000
+                },
+                "filename": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
         "internal_filesystem.createFolderRequest": {
             "type": "object",
             "required": [
@@ -1016,6 +1364,38 @@
                 }
             }
         },
+        "internal_filesystem.writeFileRequest": {
+            "type": "object",
+            "required": [
+                "content",
+                "path"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 10000000
+                },
+                "encoding": {
+                    "type": "string",
+                    "enum": [
+                        "utf8",
+                        "base64"
+                    ]
+                },
+                "filename": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255
+                }
+            }
+        },
         "internal_projects.createProjectRequest": {
             "type": "object",
             "required": [
@@ -1028,6 +1408,10 @@
                         "ssh",
                         "pat"
                     ]
+                },
+                "git_branch": {
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "git_pat": {
                     "type": "string"
@@ -1049,7 +1433,15 @@
                 }
             }
         },
-        "models.Project": {
+        "internal_system.gitInstallRequest": {
+            "type": "object",
+            "properties": {
+                "execute": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "skyport_internal_models.Project": {
             "type": "object",
             "properties": {
                 "createdAt": {
@@ -1075,15 +1467,13 @@
                 }
             }
         },
-        "response.APIError": {
+        "skyport_internal_response.APIError": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "string"
                 },
-                "details": {
-                    "type": "any"
-                },
+                "details": {},
                 "message": {
                     "type": "string"
                 },
@@ -1092,184 +1482,18 @@
                 }
             }
         },
-        "response.ErrorBody": {
+        "skyport_internal_response.ErrorBody": {
             "type": "object",
             "properties": {
                 "error": {
-                    "$ref": "#/definitions/response.APIError"
-                }
-            }
-        },
-        "skyport_internal_auth.AuthResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "description": "Future-ready placeholder; currently not issued.",
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/skyport_internal_auth.UserDTO"
-                }
-            }
-        },
-        "skyport_internal_auth.LoginRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 128,
-                    "minLength": 8
-                }
-            }
-        },
-        "skyport_internal_auth.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "name",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 120,
-                    "minLength": 2
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 128,
-                    "minLength": 8
-                }
-            }
-        },
-        "skyport_internal_auth.UserDTO": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                }
-            }
-        },
-        "skyport_internal_docker.daemonRequest": {
-            "type": "object",
-            "required": [
-                "action"
-            ],
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": [
-                        "start",
-                        "stop",
-                        "restart"
-                    ]
-                }
-            }
-        },
-        "skyport_internal_filesystem.createFolderRequest": {
-            "type": "object",
-            "required": [
-                "path"
-            ],
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "maxLength": 2048
-                }
-            }
-        },
-        "skyport_internal_filesystem.readFileRequest": {
-            "type": "object",
-            "required": [
-                "path"
-            ],
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "maxLength": 2048
-                }
-            }
-        },
-        "skyport_internal_filesystem.renameRequest": {
-            "type": "object",
-            "required": [
-                "new_path",
-                "old_path"
-            ],
-            "properties": {
-                "new_path": {
-                    "type": "string",
-                    "maxLength": 2048
-                },
-                "old_path": {
-                    "type": "string",
-                    "maxLength": 2048
-                }
-            }
-        },
-        "skyport_internal_projects.createProjectRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "git_auth_type": {
-                    "type": "string",
-                    "enum": [
-                        "ssh",
-                        "pat"
-                    ]
-                },
-                "git_pat": {
-                    "type": "string"
-                },
-                "git_ssh_key": {
-                    "type": "string"
-                },
-                "git_url": {
-                    "type": "string",
-                    "maxLength": 1024
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 120,
-                    "minLength": 2
-                },
-                "private": {
-                    "type": "boolean"
+                    "$ref": "#/definitions/skyport_internal_response.APIError"
                 }
             }
         }
     },
     "securityDefinitions": {
         "BearerAuth": {
+            "description": "Provide the JWT token as: Bearer \u003ctoken\u003e",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

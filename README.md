@@ -1,4 +1,4 @@
-<img width="1000" height="360" alt="SKY_PORT_LOGO_BANNER_1" src="https://github.com/user-attachments/assets/472ceeb6-daef-4067-b2c0-f2575ab9ee1a" />
+<img width="1000" height="300" alt="SKY_PORT_LOGO_BANNER_1" src="https://github.com/user-attachments/assets/472ceeb6-daef-4067-b2c0-f2575ab9ee1a" />
 
 # SkyPort
 
@@ -36,7 +36,9 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 - WebSocket endpoints for metrics and terminal under the `Websocket` Swagger group.
 - Filesystem endpoints support absolute paths, upload, download, read, rename, and delete.
 - Project creation supports `git clone` for public repos and PAT/SSH-based private clone flows.
-- Docker endpoints cover daemon status/control and container lifecycle actions.
+- Docker endpoints cover daemon status/control, containers, images, and volumes.
+- Auth tokens now default to 7-day validity with token reuse until expiry.
+- Metrics payloads now include both raw bytes and human-readable size fields.
 
 ---
 
@@ -97,6 +99,7 @@ Copy [.env.example](./.env.example) to `backend/.env` and adjust values.
 | `SKYPORT_LOG_LEVEL` | `debug` · `info` · `warn` · `error` |
 | `SKYPORT_SHUTDOWN_TIMEOUT_SEC` | Graceful shutdown budget (seconds) |
 | `SKYPORT_METRICS_DISK_PATH` | Optional disk mount for usage stats |
+| `JWT_EXPIRES` | JWT access token TTL in seconds (default `604800` = 7 days) |
 | `APP_*` / `JWT_SECRET` | Reserved for frontend + future auth alignment |
 
 See `.env.example` for the full list and comments.
@@ -113,6 +116,16 @@ go run ./cmd/server
 
 The server prints a local URL (e.g. `http://127.0.0.1:<port>/api/v1/health`). Ensure **the port in the browser matches** `SKYPORT_PORT`.
 
+Swagger UI:
+
+- `http://127.0.0.1:8080/docs/index.html`
+- Generate/refresh OpenAPI docs before commits:
+
+```bash
+cd backend
+make docs
+```
+
 **Build a binary**
 
 ```bash
@@ -121,6 +134,20 @@ go build -o bin/skyport ./cmd/server
 ./bin/skyport    # Linux/macOS
 # bin\skyport.exe on Windows
 ```
+
+Cross-platform release builds:
+
+```bash
+cd backend
+make build-all               # binaries only
+make build-all-with-docs     # regenerate swagger + binaries
+```
+
+Platform scripts:
+
+- Linux/macOS: `GENERATE_DOCS=1 sh ./scripts/build.sh`
+- PowerShell: `$env:GENERATE_DOCS="1"; ./scripts/build.ps1`
+- CMD: `set GENERATE_DOCS=1 && scripts\build.bat`
 
 ---
 
@@ -184,6 +211,67 @@ wscat -c "ws://127.0.0.1:8080/ws/terminal?token=$TOKEN"
 ```
 
 Swagger groups both routes under `Websocket`, but the UI cannot perform a real WebSocket upgrade. Use a WebSocket client such as `wscat`, a browser client, or Postman WebSocket tab.
+
+Terminal socket reliability:
+
+- SkyPort now sends periodic WS ping frames and extends read deadlines on pong/messages to reduce idle disconnects during long sessions.
+
+Postman tip: if header auth is stripped during upgrade, pass JWT through either:
+
+- query: `ws://127.0.0.1:8080/ws/terminal?token=<JWT>`
+- `Sec-WebSocket-Protocol: jwt,<JWT>` (server now negotiates `jwt` subprotocol)
+
+---
+
+## Docker helper routes
+
+SkyPort now includes lightweight Docker control APIs:
+
+- `GET /api/v1/docker/status`
+- `POST /api/v1/docker/install` (returns OS-specific install command)
+- `POST /api/v1/docker/start`
+- `POST /api/v1/docker/stop`
+- `POST /api/v1/docker/daemon` (`start|stop|restart`)
+- `GET /api/v1/docker/images`
+- `DELETE /api/v1/docker/image/:name`
+- `POST /api/v1/docker/images/prune`
+- `GET /api/v1/docker/volumes`
+- `DELETE /api/v1/docker/volume/:name`
+- `POST /api/v1/docker/volumes/prune`
+
+If Docker is installed but not on PATH, SkyPort tries common binary locations automatically.
+
+---
+
+## Filesystem APIs (absolute paths)
+
+The filesystem module works with absolute paths on the host/VPS:
+
+- `GET /api/v1/files?path=/abs/path`
+- `POST /api/v1/files/folder`
+- `POST /api/v1/files/file`
+- `PUT /api/v1/files/write` (`utf8` or `base64`)
+- `POST /api/v1/files/upload` (`multipart: path + file`)
+- `GET /api/v1/files/download?path=/abs/file`
+- `POST /api/v1/files/read` (auto-detects binary and returns base64 preview)
+- `PATCH /api/v1/files/rename`
+- `DELETE /api/v1/files?path=/abs/path`
+
+Windows path note:
+
+- In JSON, either escape backslashes (`G:\\data\\test.txt`) or use forward slashes (`G:/data/test.txt`).
+- Unescaped `\t` / `\n` sequences become control characters and will be rejected.
+
+Directory downloads:
+
+- `GET /api/v1/files/download?path=/abs/folder` now returns a zip archive.
+
+---
+
+## Git helper routes
+
+- `GET /api/v1/system/git/status`
+- `POST /api/v1/system/git/install` (`{"execute": true}` for one-click install attempt)
 
 ---
 

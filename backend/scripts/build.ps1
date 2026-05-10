@@ -2,6 +2,14 @@ $ErrorActionPreference = "Stop"
 $Version = $env:VERSION
 if (-not $Version) { $Version = "0.0.1" }
 $LdFlags = "-s -w -X skyport/internal/version.Version=$Version"
+$GenerateDocs = $env:GENERATE_DOCS
+if ($GenerateDocs -eq "1") {
+  if (Get-Command swag -ErrorAction SilentlyContinue) {
+    swag init -g cmd/server/main.go -o internal/docs
+  } else {
+    go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o internal/docs
+  }
+}
 
 $targets = @(
   @{ GOOS = "linux"; GOARCH = "amd64"; Ext = "" },

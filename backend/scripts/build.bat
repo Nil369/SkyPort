@@ -3,6 +3,14 @@ setlocal enabledelayedexpansion
 
 if "%VERSION%"=="" set VERSION=0.0.1
 set LDFLAGS=-s -w -X skyport/internal/version.Version=%VERSION%
+if "%GENERATE_DOCS%"=="1" (
+  where swag >nul 2>nul
+  if %errorlevel%==0 (
+    swag init -g cmd/server/main.go -o internal/docs
+  ) else (
+    go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o internal/docs
+  )
+)
 
 call :build linux amd64
 call :build linux arm64

@@ -1,10 +1,16 @@
 package filesystem
 
 import (
+	"archive/zip"
+	"encoding/base64"
 	"io"
+	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -30,6 +36,8 @@ func (m *Module) Register(a *app.App) error {
 	r.Post("/upload", uploadHandler())
 	r.Get("/download", downloadHandler())
 	r.Post("/read", readFileHandler())
+	r.Post("/file", createFileHandler())
+	r.Put("/write", writeFileHandler())
 	return nil
 }
 
@@ -45,7 +53,7 @@ type item struct {
 // @Tags Filesystem
 // @Description List files and folders at an absolute path on the VPS
 // @Produce json
-// @Param path query string true "Absolute path on VPS (e.g., /home, C:\\Users on Windows)"
+// @Param path query string true "Absolute path on VPS (use / on Linux, and G:/folder or escaped G:\\\\folder in JSON)"
 // @Success 200 {object} map[string]any
 // @Failure 400 {object} response.ErrorBody
 // @Router /api/v1/files [get]
@@ -56,7 +64,11 @@ func listHandler() fiber.Handler {
 			return response.BadRequest(c, "path query parameter is required")
 		}
 
-		targetPath = filepath.Clean(targetPath)
+		var err error
+		targetPath, err = normalizeAbsolutePath(targetPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 
 		entries, err := os.ReadDir(targetPath)
 		if err != nil {
@@ -92,7 +104,7 @@ type createFolderRequest struct {
 // @Description Create a folder at an absolute path on the VPS
 // @Accept json
 // @Produce json
-// @Param request body createFolderRequest true "Create folder payload"
+// @Param request body createFolderRequest true "Create folder payload (use forward slashes or escaped backslashes on Windows)"
 // @Success 201 {object} map[string]string
 // @Failure 400 {object} response.ErrorBody
 // @Router /api/v1/files/folder [post]
@@ -103,7 +115,10 @@ func createFolderHandler() fiber.Handler {
 			return err
 		}
 
-		path := filepath.Clean(req.Path)
+		path, err := normalizeAbsolutePath(req.Path)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 		if err := os.MkdirAll(path, 0o755); err != nil {
 			return response.Error(c, fiber.StatusInternalServerError, "mkdir_failed", err.Error())
 		}
@@ -128,7 +143,10 @@ func deleteHandler() fiber.Handler {
 			return response.BadRequest(c, "path query parameter is required")
 		}
 
-		path := filepath.Clean(targetPath)
+		path, err := normalizeAbsolutePath(targetPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 		if err := os.RemoveAll(path); err != nil {
 			return response.Error(c, fiber.StatusInternalServerError, "delete_failed", err.Error())
 		}
@@ -159,8 +177,14 @@ func renameHandler() fiber.Handler {
 			return err
 		}
 
-		oldPath := filepath.Clean(req.OldPath)
-		newPath := filepath.Clean(req.NewPath)
+		oldPath, err := normalizeAbsolutePath(req.OldPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
+		newPath, err := normalizeAbsolutePath(req.NewPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 
 		if err := os.Rename(oldPath, newPath); err != nil {
 			return response.Error(c, fiber.StatusInternalServerError, "rename_failed", err.Error())
@@ -188,7 +212,10 @@ func uploadHandler() fiber.Handler {
 			return response.BadRequest(c, "path form field is required")
 		}
 
-		targetPath := filepath.Clean(destPath)
+		targetPath, err := normalizeAbsolutePath(destPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 
 		// Get the uploaded file
 		file, err := c.FormFile("file")
@@ -196,7 +223,13 @@ func uploadHandler() fiber.Handler {
 			return response.BadRequest(c, "file form field is required or invalid: "+err.Error())
 		}
 
-		// Create parent directory if needed
+		// If path is a folder, save using uploaded filename.
+		if strings.HasSuffix(destPath, "/") || strings.HasSuffix(destPath, `\`) {
+			targetPath = filepath.Join(targetPath, filepath.Base(file.Filename))
+		} else if st, err := os.Stat(targetPath); err == nil && st.IsDir() {
+			targetPath = filepath.Join(targetPath, filepath.Base(file.Filename))
+		}
+
 		parentDir := filepath.Dir(targetPath)
 		if err := os.MkdirAll(parentDir, 0o755); err != nil {
 			return response.Error(c, fiber.StatusInternalServerError, "mkdir_failed", err.Error())
@@ -246,12 +279,15 @@ func uploadHandler() fiber.Handler {
 // @Router /api/v1/files/download [get]
 func downloadHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		filePath := strings.TrimSpace(c.Query("path"))
-		if filePath == "" {
+		rawPath := strings.TrimSpace(c.Query("path"))
+		if rawPath == "" {
 			return response.BadRequest(c, "path query parameter is required")
 		}
 
-		targetPath := filepath.Clean(filePath)
+		targetPath, err := normalizeAbsolutePath(rawPath)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 
 		info, err := os.Stat(targetPath)
 		if err != nil {
@@ -259,15 +295,19 @@ func downloadHandler() fiber.Handler {
 		}
 
 		if info.IsDir() {
-			return response.BadRequest(c, "cannot download a directory")
+			zipPath, err := zipDirectory(targetPath)
+			if err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "zip_failed", err.Error())
+			}
+			defer os.Remove(zipPath)
+			return c.Download(zipPath, filepath.Base(targetPath)+".zip")
 		}
 
 		// Force download with Content-Disposition header
 		filename := filepath.Base(targetPath)
 		c.Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
 
-		// Let Fiber set Content-Type and stream file
-		return c.SendFile(targetPath)
+		return c.Download(targetPath, filename)
 	}
 }
 
@@ -292,7 +332,10 @@ func readFileHandler() fiber.Handler {
 			return err
 		}
 
-		filePath := filepath.Clean(req.Path)
+		filePath, err := normalizeAbsolutePath(req.Path)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
 
 		info, err := os.Stat(filePath)
 		if err != nil {
@@ -313,10 +356,192 @@ func readFileHandler() fiber.Handler {
 			return response.Error(c, fiber.StatusInternalServerError, "read_failed", err.Error())
 		}
 
+		contentType := mime.TypeByExtension(filepath.Ext(filePath))
+		if contentType == "" {
+			contentType = http.DetectContentType(content)
+		}
+		if !utf8.Valid(content) {
+			encoded := base64.StdEncoding.EncodeToString(content)
+			return response.OK(c, fiber.Map{
+				"path":         filePath,
+				"size":         info.Size(),
+				"content_type": contentType,
+				"encoding":     "base64",
+				"preview":      encoded,
+				"message":      "binary file detected; content returned as base64",
+			})
+		}
+
 		return response.OK(c, fiber.Map{
-			"path":    filePath,
-			"size":    info.Size(),
-			"content": string(content),
+			"path":         filePath,
+			"size":         info.Size(),
+			"content_type": contentType,
+			"encoding":     "utf-8",
+			"content":      string(content),
 		})
 	}
+}
+
+type createFileRequest struct {
+	Path     string `json:"path" validate:"required,max=2048"`
+	Filename string `json:"filename" validate:"omitempty,max=255"`
+	Title    string `json:"title" validate:"omitempty,max=255"`
+	Content  string `json:"content" validate:"omitempty,max=10000000"`
+}
+
+// createFileHandler creates a file and parent folders if needed.
+// @Summary Create file
+// @Tags Filesystem
+// @Description Create file at absolute path; creates parent directories automatically
+// @Accept json
+// @Produce json
+// @Param request body createFileRequest true "Create file payload (path may be file or folder; filename/title optional)"
+// @Success 201 {object} map[string]any
+// @Failure 400 {object} response.ErrorBody
+// @Router /api/v1/files/file [post]
+func createFileHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req createFileRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+		basePath, err := normalizeAbsolutePath(req.Path)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
+		targetPath := resolveFileTarget(basePath, req.Filename, req.Title)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "mkdir_failed", err.Error())
+		}
+		if err := os.WriteFile(targetPath, []byte(req.Content), 0o644); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "write_failed", err.Error())
+		}
+		return response.JSON(c, fiber.StatusCreated, fiber.Map{"path": targetPath})
+	}
+}
+
+type writeFileRequest struct {
+	Path     string `json:"path" validate:"required,max=2048"`
+	Filename string `json:"filename" validate:"omitempty,max=255"`
+	Title    string `json:"title" validate:"omitempty,max=255"`
+	Content  string `json:"content" validate:"required,max=10000000"`
+	Encoding string `json:"encoding" validate:"omitempty,oneof=utf8 base64"`
+}
+
+// writeFileHandler overwrites file content.
+// @Summary Write file
+// @Tags Filesystem
+// @Description Overwrite file content at absolute path using utf8 or base64 payload
+// @Accept json
+// @Produce json
+// @Param request body writeFileRequest true "Write file payload (if path is folder, filename/title is used)"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} response.ErrorBody
+// @Router /api/v1/files/write [put]
+func writeFileHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req writeFileRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+		basePath, err := normalizeAbsolutePath(req.Path)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
+		targetPath := resolveFileTarget(basePath, req.Filename, req.Title)
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "mkdir_failed", err.Error())
+		}
+		data := []byte(req.Content)
+		if req.Encoding == "base64" {
+			decoded, err := base64.StdEncoding.DecodeString(req.Content)
+			if err != nil {
+				return response.BadRequest(c, "invalid base64 content")
+			}
+			data = decoded
+		}
+		if err := os.WriteFile(targetPath, data, 0o644); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "write_failed", err.Error())
+		}
+		return response.OK(c, fiber.Map{"path": targetPath, "bytes": len(data)})
+	}
+}
+
+func normalizeAbsolutePath(raw string) (string, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return "", fiber.NewError(fiber.StatusBadRequest, "path is required")
+	}
+	if strings.ContainsAny(p, "\n\r\t") {
+		return "", fiber.NewError(fiber.StatusBadRequest, "path contains invalid control characters; use escaped backslashes (\\\\) or forward slashes (/)")
+	}
+	if runtime.GOOS == "windows" {
+		p = strings.ReplaceAll(p, "/", `\`)
+	} else {
+		p = strings.ReplaceAll(p, `\`, "/")
+	}
+	return filepath.Clean(p), nil
+}
+
+func resolveFileTarget(path, filename, title string) string {
+	name := strings.TrimSpace(filename)
+	if name == "" {
+		name = strings.TrimSpace(title)
+	}
+	if strings.HasSuffix(path, "/") || strings.HasSuffix(path, `\`) {
+		if name == "" {
+			name = "untitled.txt"
+		}
+		return filepath.Join(path, name)
+	}
+	if st, err := os.Stat(path); err == nil && st.IsDir() {
+		if name == "" {
+			name = "untitled.txt"
+		}
+		return filepath.Join(path, name)
+	}
+	if name != "" {
+		return filepath.Join(path, name)
+	}
+	return path
+}
+
+func zipDirectory(dir string) (string, error) {
+	tmp, err := os.CreateTemp("", "skyport-dir-*.zip")
+	if err != nil {
+		return "", err
+	}
+	defer tmp.Close()
+
+	zw := zip.NewWriter(tmp)
+	defer zw.Close()
+
+	base := filepath.Clean(dir)
+	err = filepath.Walk(base, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(base, path)
+		if err != nil {
+			return err
+		}
+		w, err := zw.Create(filepath.ToSlash(rel))
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(w, f)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return tmp.Name(), nil
 }

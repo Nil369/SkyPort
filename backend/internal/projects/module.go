@@ -1,12 +1,12 @@
 package projects
 
 import (
-	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -42,6 +42,7 @@ type createProjectRequest struct {
 	GitAuth   string `json:"git_auth_type" validate:"omitempty,oneof=ssh pat"`
 	GitSSHKey string `json:"git_ssh_key" validate:"omitempty"`
 	GitPAT    string `json:"git_pat" validate:"omitempty"`
+	GitBranch string `json:"git_branch" validate:"omitempty,max=255"`
 }
 
 var slugRx = regexp.MustCompile(`[^a-zA-Z0-9-_]+`)
@@ -73,7 +74,7 @@ func createProject(a *app.App, base string) fiber.Handler {
 
 		// If GitURL provided, attempt to clone the repository
 		if req.GitURL != "" {
-			if err := gitCloneRepoWithAuth(req.GitURL, path, req.GitAuth, req.GitSSHKey, req.GitPAT); err != nil {
+			if err := gitCloneRepoWithAuth(req.GitURL, path, req.GitAuth, req.GitSSHKey, req.GitPAT, req.GitBranch); err != nil {
 				// Clean up directory on git clone failure
 				_ = os.RemoveAll(path)
 				return response.Error(c, fiber.StatusBadRequest, "git_clone_failed", err.Error())
@@ -90,14 +91,13 @@ func createProject(a *app.App, base string) fiber.Handler {
 
 // gitCloneRepo clones a public git repository to the specified path.
 // gitCloneRepoWithAuth clones a repository, supporting SSH key or PAT for private repos.
-func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat string) error {
-	// Default: simple clone
-	if authType == "" {
-		cmd := exec.Command("git", "clone", gitURL, targetPath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "failed to clone repository: "+err.Error()+": "+string(out))
-		}
-		return nil
+func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat, branch string) error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "git executable not found on host")
+	}
+	cloneArgs := []string{"clone"}
+	if strings.TrimSpace(branch) != "" {
+		cloneArgs = append(cloneArgs, "--branch", strings.TrimSpace(branch))
 	}
 
 	if authType == "pat" {
@@ -109,10 +109,12 @@ func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat string) erro
 		if parsed.Scheme != "https" {
 			return fiber.NewError(fiber.StatusBadRequest, "PAT auth requires HTTPS git URL")
 		}
-		// Use token as username with empty password
-		parsed.User = url.UserPassword(pat, "")
+		if strings.TrimSpace(pat) == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "git_pat is required for pat auth")
+		}
+		parsed.User = url.UserPassword("x-access-token", pat)
 		authURL := parsed.String()
-		cmd := exec.Command("git", "clone", authURL, targetPath)
+		cmd := exec.Command("git", append(cloneArgs, authURL, targetPath)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "failed to clone repository with PAT: "+err.Error()+": "+string(out))
 		}
@@ -123,8 +125,7 @@ func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat string) erro
 		if sshKey == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "ssh key required for ssh auth")
 		}
-		// Write ssh key to temp file
-		keyFile, err := ioutil.TempFile("", "git_ssh_key_")
+		keyFile, err := os.CreateTemp("", "git_ssh_key_")
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, "failed to create temp key file: "+err.Error())
 		}
@@ -140,11 +141,23 @@ func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat string) erro
 			_ = os.Remove(keyPath)
 		}()
 
-		// Use GIT_SSH_COMMAND to point to ssh with the key
-		sshCmd := "ssh -i " + keyPath + " -o StrictHostKeyChecking=no"
-		cmd := exec.Command("git", "-c", "core.sshCommand=\""+sshCmd+"\"", "clone", gitURL, targetPath)
+		knownHosts := "/dev/null"
+		if runtime.GOOS == "windows" {
+			knownHosts = "NUL"
+		}
+		sshCmd := "ssh -i " + keyPath + " -o StrictHostKeyChecking=no -o UserKnownHostsFile=" + knownHosts
+		cmd := exec.Command("git", append(cloneArgs, gitURL, targetPath)...)
+		cmd.Env = append(os.Environ(), "GIT_SSH_COMMAND="+sshCmd)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "failed to clone repository with SSH key: "+err.Error()+": "+string(out))
+		}
+		return nil
+	}
+
+	if authType == "" {
+		cmd := exec.Command("git", append(cloneArgs, gitURL, targetPath)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "failed to clone repository: "+err.Error()+": "+string(out))
 		}
 		return nil
 	}

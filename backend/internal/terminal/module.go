@@ -1,12 +1,16 @@
 package terminal
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/creack/pty"
@@ -17,6 +21,12 @@ import (
 	"skyport/internal/app"
 	"skyport/internal/auth"
 	wsinfra "skyport/internal/websocket"
+)
+
+const (
+	wsReadTimeout  = 120 * time.Second
+	wsPingInterval = 30 * time.Second
+	wsWriteTimeout = 15 * time.Second
 )
 
 type Module struct{}
@@ -34,23 +44,7 @@ func (m *Module) Register(a *app.App) error {
 		connHdr := strings.ToLower(c.Get("Connection"))
 		upgHdr := strings.ToLower(c.Get("Upgrade"))
 		if strings.Contains(connHdr, "upgrade") && strings.Contains(upgHdr, "websocket") {
-			// Extract token from query param, Authorization header, or Sec-WebSocket-Protocol
-			token := strings.TrimSpace(c.Query("token"))
-			if token == "" {
-				authHeader := strings.TrimSpace(c.Get("Authorization"))
-				if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-					token = strings.TrimSpace(authHeader[len("Bearer "):])
-				} else if authHeader != "" {
-					token = authHeader
-				}
-			}
-			if token == "" {
-				// Some websocket clients send token in Sec-WebSocket-Protocol
-				proto := strings.TrimSpace(c.Get("Sec-WebSocket-Protocol"))
-				if proto != "" {
-					token = proto
-				}
-			}
+			token := wsinfra.ExtractToken(c)
 
 			if token == "" {
 				c.Set("X-Auth-Failed", "true")
@@ -67,7 +61,9 @@ func (m *Module) Register(a *app.App) error {
 	})
 
 	// Register websocket handler
-	a.Fiber.Get("/ws/terminal", gws.New(terminalHandler()))
+	a.Fiber.Get("/ws/terminal", gws.New(terminalHandler(), gws.Config{
+		Subprotocols: []string{"jwt"},
+	}))
 	return nil
 }
 
@@ -100,18 +96,57 @@ type controlMessage struct {
 	Rows uint16 `json:"rows"`
 }
 
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+
+func sanitizeTerminalOutput(in []byte) []byte {
+	s := string(in)
+	s = ansiPattern.ReplaceAllString(s, "")
+	// Remove OSC and stray ESC bytes often emitted by prompt themes.
+	s = strings.ReplaceAll(s, "\x1b]0;", "")
+	s = strings.ReplaceAll(s, "\x1b", "")
+	return []byte(s)
+}
+
 func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 	shell := "/bin/bash"
 	args := []string{"-l"}
 	if runtime.GOOS == "windows" {
-		shell = "powershell.exe"
-		args = []string{"-NoLogo"}
+		// Use cmd by default for web clients to avoid complex prompt themes/escape codes.
+		shell = "cmd.exe"
+		args = []string{"/Q", "/K", "prompt $P$G"}
+		if _, err := exec.LookPath(shell); err != nil {
+			shell = "powershell.exe"
+			args = []string{"-NoLogo", "-NoProfile"}
+		}
 	}
 	cmd := exec.Command(shell, args...)
 	cmd.Env = os.Environ()
+
+	var writeMu sync.Mutex
+	write := func(mt int, payload []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+		return conn.WriteMessage(mt, payload)
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	})
+
+	stopPing := make(chan struct{})
+	go pingLoop(write, stopPing)
+	defer close(stopPing)
+
 	f, err := pty.Start(cmd)
 	if err != nil {
-		_ = conn.WriteMessage(gws.TextMessage, []byte("failed to start shell\n"))
+		if runtime.GOOS == "windows" {
+			if runPipeShellSession(conn, client, shell, args...) {
+				return
+			}
+		}
+		_ = write(gws.TextMessage, []byte(fmt.Sprintf("failed to start shell: %v\n", err)))
 		return
 	}
 	defer func() {
@@ -128,7 +163,7 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 		for {
 			n, err := f.Read(buf)
 			if n > 0 {
-				chunk := append([]byte{}, buf[:n]...)
+				chunk := sanitizeTerminalOutput(append([]byte{}, buf[:n]...))
 				select {
 				case client.Send <- chunk:
 				default:
@@ -142,7 +177,7 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 
 	go func() {
 		for msg := range client.Send {
-			if err := conn.WriteMessage(gws.BinaryMessage, msg); err != nil {
+			if err := write(gws.TextMessage, msg); err != nil {
 				return
 			}
 		}
@@ -157,6 +192,7 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 			if err != nil {
 				return
 			}
+			_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 			if t == gws.TextMessage && len(data) > 0 && data[0] == '{' {
 				var ctrl controlMessage
 				if json.Unmarshal(data, &ctrl) == nil && ctrl.Type == "resize" && ctrl.Cols > 0 && ctrl.Rows > 0 {
@@ -164,9 +200,130 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 					continue
 				}
 			}
-			if _, err := io.WriteString(f, string(data)); err != nil {
+			input := normalizeInput(data)
+			if _, err := f.Write(input); err != nil {
 				return
 			}
 		}
 	}
+}
+
+func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, args ...string) bool {
+	cmd := exec.Command(shell, args...)
+	cmd.Env = os.Environ()
+
+	var writeMu sync.Mutex
+	write := func(mt int, payload []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+		return conn.WriteMessage(mt, payload)
+	}
+
+	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	})
+	stopPing := make(chan struct{})
+	go pingLoop(write, stopPing)
+	defer close(stopPing)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return false
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return false
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return false
+	}
+	if err := cmd.Start(); err != nil {
+		return false
+	}
+	defer func() {
+		_ = stdin.Close()
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	}()
+
+	done := make(chan struct{})
+	forward := func(r io.Reader) {
+		buf := make([]byte, 2048)
+		for {
+			n, e := r.Read(buf)
+			if n > 0 {
+				chunk := sanitizeTerminalOutput(append([]byte{}, buf[:n]...))
+				select {
+				case client.Send <- chunk:
+				default:
+				}
+			}
+			if e != nil {
+				break
+			}
+		}
+	}
+
+	go func() {
+		defer close(done)
+		go forward(stdout)
+		go forward(stderr)
+		_ = cmd.Wait()
+	}()
+
+	go func() {
+		for msg := range client.Send {
+			if err := write(gws.TextMessage, msg); err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-done:
+			return true
+		default:
+			t, data, err := conn.ReadMessage()
+			if err != nil {
+				return true
+			}
+			_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+			if t == gws.TextMessage && len(data) > 0 && data[0] == '{' {
+				// Resize is ignored for pipe fallback mode on Windows.
+				continue
+			}
+			input := normalizeInput(data)
+			if _, err := stdin.Write(input); err != nil {
+				return true
+			}
+		}
+	}
+}
+
+func pingLoop(write func(int, []byte) error, stop <-chan struct{}) {
+	ticker := time.NewTicker(wsPingInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			if err := write(gws.PingMessage, []byte("ping")); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func normalizeInput(data []byte) []byte {
+	// Postman sends one WS frame per Send click. If no newline is present,
+	// append one so typical commands execute immediately.
+	if len(data) > 0 && !bytes.Contains(data, []byte("\n")) && !bytes.Contains(data, []byte("\r")) {
+		return append(append([]byte{}, data...), '\n')
+	}
+	return data
 }

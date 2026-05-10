@@ -11,6 +11,6 @@ func Mount(a *app.App, r fiber.Router) {
 	authGroup := r.Group("/auth")
 	authGroup.Post("/register", registerHandler(svc))
 	authGroup.Post("/login", loginHandler(svc))
-	authGroup.Post("/logout", logoutHandler())
+	authGroup.Post("/logout", RequireJWT(a.Config.JWTSecret), logoutHandler(svc))
 	authGroup.Get("/me", RequireJWT(a.Config.JWTSecret), meHandler(svc))
 }

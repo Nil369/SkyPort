@@ -7,8 +7,10 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -102,6 +104,7 @@ func (s *Service) Collect(ctx context.Context) (*HostSnapshot, error) {
 		Host: HostInfo{
 			Hostname:      hinfo.Hostname,
 			UptimeSeconds: uptime,
+			UptimeHuman:   humanUptime(uptime),
 		},
 		CPU: CPUStats{
 			UsagePercent: usage,
@@ -109,18 +112,55 @@ func (s *Service) Collect(ctx context.Context) (*HostSnapshot, error) {
 		},
 		Memory: MemStats{
 			TotalBytes:  vm.Total,
+			TotalHuman:  humanBytes(vm.Total),
 			UsedBytes:   vm.Used,
+			UsedHuman:   humanBytes(vm.Used),
 			FreeBytes:   vm.Free,
+			FreeHuman:   humanBytes(vm.Free),
 			UsedPercent: vm.UsedPercent,
 		},
 		Disk: DiskStats{
 			Path:        s.diskPath,
 			TotalBytes:  du.Total,
+			TotalHuman:  humanBytes(du.Total),
 			UsedBytes:   du.Used,
+			UsedHuman:   humanBytes(du.Used),
 			FreeBytes:   du.Free,
+			FreeHuman:   humanBytes(du.Free),
 			UsedPercent: du.UsedPercent,
 		},
 	}, nil
+}
+
+func humanBytes(v uint64) string {
+	if v < 1024 {
+		return fmt.Sprintf("%d B", v)
+	}
+	units := []string{"KB", "MB", "GB", "TB", "PB"}
+	value := float64(v)
+	idx := -1
+	for value >= 1024 && idx < len(units)-1 {
+		value /= 1024
+		idx++
+	}
+	value = math.Round(value*100) / 100
+	return fmt.Sprintf("%.2f %s", value, units[idx])
+}
+
+func humanUptime(seconds uint64) string {
+	d := time.Duration(seconds) * time.Second
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	out := ""
+	if h > 0 {
+		out += fmt.Sprintf("%dhr ", h)
+	}
+	if m > 0 || h > 0 {
+		out += fmt.Sprintf("%dmin ", m)
+	}
+	out += fmt.Sprintf("%ds", s)
+	return strings.TrimSpace(out)
 }
 
 func defaultDiskPath() string {

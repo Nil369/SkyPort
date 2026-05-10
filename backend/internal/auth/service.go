@@ -61,8 +61,28 @@ func (s *Service) Me(userID uint) (*UserDTO, error) {
 }
 
 func (s *Service) issueToken(user *models.User) (*AuthResponse, error) {
+	now := time.Now().UTC()
+	if user.ActiveToken != "" && user.TokenExpiresAt != nil && user.TokenExpiresAt.After(now) {
+		if _, err := ParseAccessToken(user.ActiveToken, s.jwtSecret); err == nil {
+			return &AuthResponse{
+				User:         UserDTO{ID: user.ID, Name: user.Name, Email: user.Email},
+				AccessToken:  user.ActiveToken,
+				TokenType:    "Bearer",
+				ExpiresAtUTC: user.TokenExpiresAt.UTC().Format(time.RFC3339),
+			}, nil
+		}
+	}
+
 	raw, expiresAt, err := SignAccessToken(s.jwtSecret, user.ID, user.Email, s.jwtExpires)
 	if err != nil {
+		return nil, err
+	}
+	user.ActiveToken = raw
+	user.TokenExpiresAt = &expiresAt
+	if err := s.db.Model(user).Updates(map[string]any{
+		"active_token":     user.ActiveToken,
+		"token_expires_at": user.TokenExpiresAt,
+	}).Error; err != nil {
 		return nil, err
 	}
 	return &AuthResponse{
@@ -71,4 +91,11 @@ func (s *Service) issueToken(user *models.User) (*AuthResponse, error) {
 		TokenType:    "Bearer",
 		ExpiresAtUTC: expiresAt.Format(time.RFC3339),
 	}, nil
+}
+
+func (s *Service) Logout(userID uint) error {
+	return s.db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]any{
+		"active_token":     "",
+		"token_expires_at": nil,
+	}).Error
 }

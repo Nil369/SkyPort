@@ -5,9 +5,10 @@
 // @title SkyPort API
 // @version 0.0.1
 // @description Lightweight self-hosted developer cloud platform API
-// @contact.name SkyPort Maintainers
-// @contact.email support@skyport.example
-// @license.name MIT
+// @contact.name Akash Halder
+// @contact.url https://github.com/Nil369
+// @license.name AGPL-3.0
+// @license.url https://www.gnu.org/licenses/agpl-3.0.en.html
 // @host localhost
 // @BasePath /
 // @schemes http
