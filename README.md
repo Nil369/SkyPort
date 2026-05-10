@@ -56,6 +56,12 @@ SkyPort/
 
 ---
 
+## Screenshots
+
+<img width="1314" height="915" alt="image" src="https://github.com/user-attachments/assets/eded94ba-aec2-4478-bc82-f4cfb91145e2" />
+
+---
+
 ## Tech stack
 
 | Layer | Technologies |
@@ -178,11 +184,6 @@ wscat -c "ws://127.0.0.1:8080/ws/terminal?token=$TOKEN"
 ```
 
 Swagger groups both routes under `Websocket`, but the UI cannot perform a real WebSocket upgrade. Use a WebSocket client such as `wscat`, a browser client, or Postman WebSocket tab.
-
----
-
-## Screenshots
-
 
 ---
 
