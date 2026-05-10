@@ -31,14 +31,17 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 ## Implemented so far
 
 - Modular Go backend with Fiber, SQLite/GORM, config, middleware, and versioned routes.
-- Swagger/OpenAPI docs generated from handler annotations.
-- REST endpoints for health, metrics, auth, filesystem, projects, system, and Docker.
-- WebSocket endpoints for metrics and terminal under the `Websocket` Swagger group.
-- Filesystem endpoints support absolute paths, upload, download, read, rename, and delete.
-- Project creation supports `git clone` for public repos and PAT/SSH-based private clone flows.
-- Docker endpoints cover daemon status/control, containers, images, and volumes.
-- Auth tokens now default to 7-day validity with token reuse until expiry.
-- Metrics payloads now include both raw bytes and human-readable size fields.
+- Swagger/OpenAPI docs (`/docs`) with JWT Bearer on protected APIs.
+- **Auth**: register, login, JWT, protected routes where configured.
+- **Projects**: JWT required; clone public HTTPS repos or private via PAT / SSH keys; clarified in API docs.
+- **Runtime detection** (`POST /api/v1/runtime/detect`): recursive scan under repo (skips `node_modules`, `.git`, …; depth capped), discovers `docker-compose` / Dockerfile / Node / Bun / Python / Go / Rust / Java / PHP, monorepo hints (`server/` vs `client/`), suggests `working_directory` and suggested install/build/start commands.
+- **Capabilities** (`GET /api/v1/system/capabilities`): RAM/swap/cores, Docker CLI vs daemon reachable, coarse deployment recommendation.
+- **Runtime install** (`POST /api/v1/runtime/install`): checks PATH first (skip if already present); `dry_run` overrides `execute` for safety; previews or runs OS-specific installers.
+- **Deployments** (`/api/v1/deployments`): create/list/get/delete; env vars (+ bulk `.env`-style payload); prefetch **runtime & strategy on create**; `auto_start` runs install/build/start as subprocesses **in resolved working directory**; invalid `working_directory` falls back to detection then repo root; WebSocket **`/ws/deployments/:id/logs`** for streamed logs. *(Request field `port` is reserved—not yet injected into proxy or env automatically.)*
+- **Process manager**: in-process tracker; starts app as **direct subprocess** (`Cmd.Dir` set to resolved app folder).
+- **Proxy**: generates Caddy or Nginx config files under workspace `proxy/` (no live reload / SSL automation yet).
+- Docker REST module: daemon/containers/images/volumes (operational primitives—**not** the same as full Coolify-style app orchestration yet).
+- WebSocket metrics + terminal where enabled; filesystem; metrics payloads with human-readable sizes.
 
 ---
 
@@ -71,7 +74,6 @@ SkyPort/
 | API | Go, [Fiber](https://gofiber.io/), REST, WebSockets (metrics stream) |
 | Data | SQLite, [GORM](https://gorm.io/) |
 | Frontend | React, TypeScript, [Vite](https://vitejs.dev/) |
-| Styling | Tailwind CSS *(planned for dashboard UI; scaffold may not include it yet)* |
 | Metrics | [gopsutil](https://github.com/shirou/gopsutil) *(host metrics — in development)* |
 
 ---

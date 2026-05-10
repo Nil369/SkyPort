@@ -12,3 +12,4 @@
 
 # Env files (keep .env.example in repo)
 .env
+/skyport/workspace

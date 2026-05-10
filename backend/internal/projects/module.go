@@ -12,6 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"skyport/internal/app"
+	"skyport/internal/auth"
 	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/validator"
@@ -29,6 +30,7 @@ func (m *Module) Register(a *app.App) error {
 	_ = os.MkdirAll(base, 0o755)
 
 	r := a.Fiber.Group("/api/v1/projects")
+	r.Use(auth.RequireJWT(a.Config.JWTSecret))
 	r.Get("/", listProjects(a))
 	r.Post("/", createProject(a, base))
 	r.Delete("/:id", deleteProject(a))
@@ -50,12 +52,14 @@ var slugRx = regexp.MustCompile(`[^a-zA-Z0-9-_]+`)
 // createProject creates a new project entry and workspace folder.
 // @Summary Create project
 // @Tags Projects
-// @Description Create a new project record and workspace directory. If git_url is provided, clones the repository (public repos only for now).
+// @Description Create project folder and DB row. git_url public (HTTPS): omit git_auth_type, e.g. https://github.com/org/repo.git. Private: git_auth_type pat plus git_pat, or ssh plus git_ssh_key; optional git_branch. Then deploy with POST /api/v1/deployments and project id.
+// @Security BearerAuth
 // @Accept json
 // @Produce json
 // @Param request body createProjectRequest true "Create project payload"
 // @Success 201 {object} models.Project
 // @Failure 400 {object} response.ErrorBody
+// @Failure 401 {object} response.ErrorBody
 // @Router /api/v1/projects [post]
 func createProject(a *app.App, base string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -169,8 +173,10 @@ func gitCloneRepoWithAuth(gitURL, targetPath, authType, sshKey, pat, branch stri
 // @Summary List projects
 // @Tags Projects
 // @Description Returns list of projects
+// @Security BearerAuth
 // @Produce json
 // @Success 200 {array} models.Project
+// @Failure 401 {object} response.ErrorBody
 // @Router /api/v1/projects [get]
 func listProjects(a *app.App) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -186,10 +192,12 @@ func listProjects(a *app.App) fiber.Handler {
 // @Summary Delete project
 // @Tags Projects
 // @Description Delete a project by ID
+// @Security BearerAuth
 // @Produce json
 // @Param id path string true "Project ID"
 // @Success 200 {object} map[string]any
 // @Failure 400 {object} response.ErrorBody
+// @Failure 401 {object} response.ErrorBody
 // @Router /api/v1/projects/{id} [delete]
 func deleteProject(a *app.App) fiber.Handler {
 	return func(c *fiber.Ctx) error {

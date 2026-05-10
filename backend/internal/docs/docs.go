@@ -198,6 +198,333 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/deployments": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "List deployments",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/skyport_internal_models.Deployment"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates a deployment. working_directory is ONLY a subfolder INSIDE the cloned repo (examples: server, client). Do not pass SKYPORT workspace paths—the server joins it onto project.path. Omit for auto-detection. Field runtime in JSON is ignored; detection runs locally. Responses include prefetch runtime/strategy; poll GET for live status during auto_start.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Create deployment",
+                "parameters": [
+                    {
+                        "description": "Deployment payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_deployments.CreateDeploymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_models.Deployment"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/deployments/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Get deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_models.Deployment"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Delete deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/deployments/{id}/env": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "List deployment environment variables",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Add deployment environment variable",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Env payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_deployments.EnvVarRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/deployments/{id}/env/bulk": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Add env vars in bulk",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Bulk env payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_deployments.BulkEnvRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/docker/container/{name}": {
             "delete": {
                 "description": "Remove a Docker container by name or ID",
@@ -988,7 +1315,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "System"
+                    "Websocket"
                 ],
                 "summary": "Metrics snapshot",
                 "responses": {
@@ -1010,6 +1337,11 @@ const docTemplate = `{
         },
         "/api/v1/projects": {
             "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Returns list of projects",
                 "produces": [
                     "application/json"
@@ -1027,11 +1359,22 @@ const docTemplate = `{
                                 "$ref": "#/definitions/skyport_internal_models.Project"
                             }
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
                     }
                 }
             },
             "post": {
-                "description": "Create a new project record and workspace directory. If git_url is provided, clones the repository (public repos only for now).",
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create project folder and DB row. git_url public (HTTPS): omit git_auth_type, e.g. https://github.com/org/repo.git. Private: git_auth_type pat plus git_pat, or ssh plus git_ssh_key; optional git_branch. Then deploy with POST /api/v1/deployments and project id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1065,12 +1408,23 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
                     }
                 }
             }
         },
         "/api/v1/projects/{id}": {
             "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
                 "description": "Delete a project by ID",
                 "produces": [
                     "application/json"
@@ -1100,6 +1454,167 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/proxy/generate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Generate reverse proxy config",
+                "parameters": [
+                    {
+                        "description": "Proxy generation input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_proxy.generateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/runtime/detect": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Scans recursively under project_path (skipped: node_modules, .git, etc.) for manifests and Docker files.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runtime"
+                ],
+                "summary": "Detect runtime",
+                "parameters": [
+                    {
+                        "description": "Detection input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_runtime.detectRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_runtime.DetectionResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/runtime/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Checks PATH first; skips install when already present. See installRequest rules for dry_run vs execute.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runtime"
+                ],
+                "summary": "Ensure / install runtime",
+                "parameters": [
+                    {
+                        "description": "Install input — use {\\",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_runtime.installRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/system/capabilities": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "System capabilities",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_capabilities.Snapshot"
                         }
                     }
                 }
@@ -1185,6 +1700,25 @@ const docTemplate = `{
                         }
                     }
                 }
+            }
+        },
+        "/ws/deployments/{id}/logs": {
+            "get": {
+                "description": "Streams deployment log lines after connection. Authenticate via Authorization Bearer, token query (?token=JWT), or Sec-WebSocket-Protocol jwt,JWT_TOKEN",
+                "tags": [
+                    "Websocket"
+                ],
+                "summary": "Deployment logs (WebSocket)",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
             }
         },
         "/ws/metrics": {
@@ -1282,6 +1816,120 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_capabilities.Snapshot": {
+            "type": "object",
+            "properties": {
+                "architecture": {
+                    "type": "string"
+                },
+                "cpu_cores": {
+                    "type": "integer"
+                },
+                "docker_available": {
+                    "description": "docker CLI installed",
+                    "type": "boolean"
+                },
+                "docker_daemon_running": {
+                    "description": "docker engine reachable",
+                    "type": "boolean"
+                },
+                "free_ram_bytes": {
+                    "type": "integer"
+                },
+                "recommendation": {
+                    "type": "string"
+                },
+                "recommendation_notes": {
+                    "type": "string"
+                },
+                "swap_total_bytes": {
+                    "type": "integer"
+                },
+                "total_ram_bytes": {
+                    "type": "integer"
+                },
+                "virtualization": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_deployments.BulkEnvRequest": {
+            "type": "object",
+            "properties": {
+                "env_text": {
+                    "type": "string"
+                },
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_deployments.bulkEnvPair"
+                    }
+                }
+            }
+        },
+        "internal_deployments.CreateDeploymentRequest": {
+            "type": "object",
+            "required": [
+                "project_id"
+            ],
+            "properties": {
+                "auto_start": {
+                    "type": "boolean"
+                },
+                "build_cmd": {
+                    "type": "string",
+                    "maxLength": 1024
+                },
+                "install_cmd": {
+                    "type": "string",
+                    "maxLength": 1024
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "start_cmd": {
+                    "type": "string",
+                    "maxLength": 1024
+                },
+                "working_directory": {
+                    "type": "string",
+                    "maxLength": 512
+                }
+            }
+        },
+        "internal_deployments.EnvVarRequest": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "masked": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_deployments.bulkEnvPair": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "masked": {
+                    "type": "boolean"
+                },
+                "value": {
                     "type": "string"
                 }
             }
@@ -1436,11 +2084,190 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_proxy.generateRequest": {
+            "type": "object",
+            "required": [
+                "domain",
+                "port"
+            ],
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "caddy",
+                        "nginx"
+                    ]
+                }
+            }
+        },
+        "internal_runtime.Component": {
+            "type": "object",
+            "properties": {
+                "evidence": {
+                    "type": "string"
+                },
+                "kind": {
+                    "$ref": "#/definitions/internal_runtime.Kind"
+                },
+                "working_directory": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_runtime.DetectionResult": {
+            "type": "object",
+            "properties": {
+                "build_command": {
+                    "type": "string"
+                },
+                "components": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_runtime.Component"
+                    }
+                },
+                "confidence": {
+                    "type": "string"
+                },
+                "install_command": {
+                    "type": "string"
+                },
+                "matched_files": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "runtime": {
+                    "$ref": "#/definitions/internal_runtime.Kind"
+                },
+                "start_command": {
+                    "type": "string"
+                },
+                "working_directory": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_runtime.Kind": {
+            "type": "string",
+            "enum": [
+                "unknown",
+                "node",
+                "bun",
+                "python",
+                "go",
+                "php",
+                "java",
+                "rust",
+                "dockerfile",
+                "compose"
+            ],
+            "x-enum-varnames": [
+                "Unknown",
+                "Node",
+                "Bun",
+                "Python",
+                "Go",
+                "PHP",
+                "Java",
+                "Rust",
+                "Docker",
+                "Compose"
+            ]
+        },
+        "internal_runtime.detectRequest": {
+            "type": "object",
+            "required": [
+                "project_path"
+            ],
+            "properties": {
+                "project_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                }
+            }
+        },
+        "internal_runtime.installRequest": {
+            "type": "object",
+            "required": [
+                "runtime"
+            ],
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "runtime": {
+                    "type": "string",
+                    "enum": [
+                        "node",
+                        "bun",
+                        "python",
+                        "go",
+                        "php",
+                        "java"
+                    ]
+                }
+            }
+        },
         "internal_system.gitInstallRequest": {
             "type": "object",
             "properties": {
                 "execute": {
                     "type": "boolean"
+                }
+            }
+        },
+        "skyport_internal_models.Deployment": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "logPath": {
+                    "type": "string"
+                },
+                "path": {
+                    "type": "string"
+                },
+                "projectID": {
+                    "type": "integer"
+                },
+                "runtime": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "strategy": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
                 }
             }
         },
@@ -1496,7 +2323,7 @@ const docTemplate = `{
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "Provide the JWT token as: Bearer \u003ctoken\u003e",
+            "description": "JWT access token — must include Bearer prefix exactly: Bearer eyJ...",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

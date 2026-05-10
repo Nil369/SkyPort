@@ -54,6 +54,83 @@ definitions:
       name:
         type: string
     type: object
+  internal_capabilities.Snapshot:
+    properties:
+      architecture:
+        type: string
+      cpu_cores:
+        type: integer
+      docker_available:
+        description: docker CLI installed
+        type: boolean
+      docker_daemon_running:
+        description: docker engine reachable
+        type: boolean
+      free_ram_bytes:
+        type: integer
+      recommendation:
+        type: string
+      recommendation_notes:
+        type: string
+      swap_total_bytes:
+        type: integer
+      total_ram_bytes:
+        type: integer
+      virtualization:
+        type: string
+    type: object
+  internal_deployments.BulkEnvRequest:
+    properties:
+      env_text:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/internal_deployments.bulkEnvPair'
+        type: array
+    type: object
+  internal_deployments.CreateDeploymentRequest:
+    properties:
+      auto_start:
+        type: boolean
+      build_cmd:
+        maxLength: 1024
+        type: string
+      install_cmd:
+        maxLength: 1024
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      project_id:
+        type: integer
+      start_cmd:
+        maxLength: 1024
+        type: string
+      working_directory:
+        maxLength: 512
+        type: string
+    required:
+    - project_id
+    type: object
+  internal_deployments.EnvVarRequest:
+    properties:
+      key:
+        type: string
+      masked:
+        type: boolean
+      value:
+        type: string
+    type: object
+  internal_deployments.bulkEnvPair:
+    properties:
+      key:
+        type: string
+      masked:
+        type: boolean
+      value:
+        type: string
+    type: object
   internal_docker.daemonRequest:
     properties:
       action:
@@ -159,10 +236,137 @@ definitions:
     required:
     - name
     type: object
+  internal_proxy.generateRequest:
+    properties:
+      domain:
+        maxLength: 255
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      type:
+        enum:
+        - caddy
+        - nginx
+        type: string
+    required:
+    - domain
+    - port
+    type: object
+  internal_runtime.Component:
+    properties:
+      evidence:
+        type: string
+      kind:
+        $ref: '#/definitions/internal_runtime.Kind'
+      working_directory:
+        type: string
+    type: object
+  internal_runtime.DetectionResult:
+    properties:
+      build_command:
+        type: string
+      components:
+        items:
+          $ref: '#/definitions/internal_runtime.Component'
+        type: array
+      confidence:
+        type: string
+      install_command:
+        type: string
+      matched_files:
+        items:
+          type: string
+        type: array
+      notes:
+        type: string
+      runtime:
+        $ref: '#/definitions/internal_runtime.Kind'
+      start_command:
+        type: string
+      working_directory:
+        type: string
+    type: object
+  internal_runtime.Kind:
+    enum:
+    - unknown
+    - node
+    - bun
+    - python
+    - go
+    - php
+    - java
+    - rust
+    - dockerfile
+    - compose
+    type: string
+    x-enum-varnames:
+    - Unknown
+    - Node
+    - Bun
+    - Python
+    - Go
+    - PHP
+    - Java
+    - Rust
+    - Docker
+    - Compose
+  internal_runtime.detectRequest:
+    properties:
+      project_path:
+        maxLength: 2048
+        type: string
+    required:
+    - project_path
+    type: object
+  internal_runtime.installRequest:
+    properties:
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      runtime:
+        enum:
+        - node
+        - bun
+        - python
+        - go
+        - php
+        - java
+        type: string
+    required:
+    - runtime
+    type: object
   internal_system.gitInstallRequest:
     properties:
       execute:
         type: boolean
+    type: object
+  skyport_internal_models.Deployment:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      error:
+        type: string
+      id:
+        type: integer
+      logPath:
+        type: string
+      path:
+        type: string
+      projectID:
+        type: integer
+      runtime:
+        type: string
+      status:
+        type: string
+      strategy:
+        type: string
+      updatedAt:
+        type: string
     type: object
   skyport_internal_models.Project:
     properties:
@@ -321,6 +525,216 @@ paths:
       summary: Register user
       tags:
       - Auth
+  /api/v1/deployments:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/skyport_internal_models.Deployment'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: List deployments
+      tags:
+      - Deployments
+    post:
+      consumes:
+      - application/json
+      description: 'Creates a deployment. working_directory is ONLY a subfolder INSIDE
+        the cloned repo (examples: server, client). Do not pass SKYPORT workspace
+        paths—the server joins it onto project.path. Omit for auto-detection. Field
+        runtime in JSON is ignored; detection runs locally. Responses include prefetch
+        runtime/strategy; poll GET for live status during auto_start.'
+      parameters:
+      - description: Deployment payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_deployments.CreateDeploymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/skyport_internal_models.Deployment'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Create deployment
+      tags:
+      - Deployments
+  /api/v1/deployments/{id}:
+    delete:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Delete deployment
+      tags:
+      - Deployments
+    get:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/skyport_internal_models.Deployment'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Get deployment
+      tags:
+      - Deployments
+  /api/v1/deployments/{id}/env:
+    get:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: List deployment environment variables
+      tags:
+      - Deployments
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Env payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_deployments.EnvVarRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Add deployment environment variable
+      tags:
+      - Deployments
+  /api/v1/deployments/{id}/env/bulk:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Bulk env payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_deployments.BulkEnvRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Add env vars in bulk
+      tags:
+      - Deployments
   /api/v1/docker/container/{name}:
     delete:
       description: Remove a Docker container by name or ID
@@ -861,7 +1275,7 @@ paths:
             $ref: '#/definitions/skyport_internal_response.ErrorBody'
       summary: Metrics snapshot
       tags:
-      - System
+      - Websocket
   /api/v1/projects:
     get:
       description: Returns list of projects
@@ -874,14 +1288,22 @@ paths:
             items:
               $ref: '#/definitions/skyport_internal_models.Project'
             type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
       summary: List projects
       tags:
       - Projects
     post:
       consumes:
       - application/json
-      description: Create a new project record and workspace directory. If git_url
-        is provided, clones the repository (public repos only for now).
+      description: 'Create project folder and DB row. git_url public (HTTPS): omit
+        git_auth_type, e.g. https://github.com/org/repo.git. Private: git_auth_type
+        pat plus git_pat, or ssh plus git_ssh_key; optional git_branch. Then deploy
+        with POST /api/v1/deployments and project id.'
       parameters:
       - description: Create project payload
         in: body
@@ -900,6 +1322,12 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
       summary: Create project
       tags:
       - Projects
@@ -924,9 +1352,114 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
       summary: Delete project
       tags:
       - Projects
+  /api/v1/proxy/generate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Proxy generation input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_proxy.generateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Generate reverse proxy config
+      tags:
+      - Proxy
+  /api/v1/runtime/detect:
+    post:
+      consumes:
+      - application/json
+      description: 'Scans recursively under project_path (skipped: node_modules, .git,
+        etc.) for manifests and Docker files.'
+      parameters:
+      - description: Detection input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_runtime.detectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_runtime.DetectionResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Detect runtime
+      tags:
+      - Runtime
+  /api/v1/runtime/install:
+    post:
+      consumes:
+      - application/json
+      description: Checks PATH first; skips install when already present. See installRequest
+        rules for dry_run vs execute.
+      parameters:
+      - description: Install input — use {\
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_runtime.installRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Ensure / install runtime
+      tags:
+      - Runtime
+  /api/v1/system/capabilities:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_capabilities.Snapshot'
+      summary: System capabilities
+      tags:
+      - System
   /api/v1/system/git/install:
     post:
       consumes:
@@ -982,6 +1515,21 @@ paths:
       summary: System info
       tags:
       - System
+  /ws/deployments/{id}/logs:
+    get:
+      description: Streams deployment log lines after connection. Authenticate via
+        Authorization Bearer, token query (?token=JWT), or Sec-WebSocket-Protocol
+        jwt,JWT_TOKEN
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses: {}
+      summary: Deployment logs (WebSocket)
+      tags:
+      - Websocket
   /ws/metrics:
     get:
       description: |-
@@ -1005,7 +1553,7 @@ schemes:
 - http
 securityDefinitions:
   BearerAuth:
-    description: 'Provide the JWT token as: Bearer <token>'
+    description: 'JWT access token — must include Bearer prefix exactly: Bearer eyJ...'
     in: header
     name: Authorization
     type: apiKey

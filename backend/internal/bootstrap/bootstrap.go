@@ -30,14 +30,17 @@ import (
 
 	"skyport/internal/api"
 	"skyport/internal/app"
+	"skyport/internal/capabilities"
 	"skyport/internal/config"
 	"skyport/internal/database"
-	"skyport/internal/deploy"
+	"skyport/internal/deployments"
 	"skyport/internal/docker"
 	"skyport/internal/filesystem"
 	"skyport/internal/httperrors"
 	"skyport/internal/metrics"
+	"skyport/internal/proxy"
 	"skyport/internal/projects"
+	"skyport/internal/runtime"
 	"skyport/internal/system"
 	"skyport/internal/terminal"
 	"skyport/internal/version"
@@ -133,7 +136,10 @@ func Build(cfg *config.Config) (*app.App, error) {
 		container.RegisterModule(&docker.Module{})
 	}
 	container.RegisterModule(&system.Module{})
-	container.RegisterModule(&deploy.Module{})
+	container.RegisterModule(&capabilities.Module{})
+	container.RegisterModule(&runtime.Module{})
+	container.RegisterModule(deployments.NewModule())
+	container.RegisterModule(&proxy.Module{})
 	if cfg.EnableFilesystem {
 		container.RegisterModule(&filesystem.Module{})
 	}

@@ -16,6 +16,10 @@ func All() []any {
 	return []any{
 		&User{},
 		&Project{},
+		&Deployment{},
+		&Runtime{},
+		&Process{},
+		&EnvironmentVariable{},
 	}
 }
 
@@ -41,4 +45,60 @@ type Project struct {
 	Name      string         `gorm:"size:120;not null"`
 	Path      string         `gorm:"size:1024;not null;uniqueIndex"`
 	GitURL    string         `gorm:"size:1024"`
+}
+
+// Deployment tracks one deployment lifecycle for a project.
+type Deployment struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+
+	ProjectID uint   `gorm:"index;not null"`
+	Path      string `gorm:"size:1024;not null"`
+	Runtime   string `gorm:"size:50;not null"`
+	Strategy  string `gorm:"size:50;not null"`
+	Status    string `gorm:"size:30;index;not null"`
+	LogPath   string `gorm:"size:1024;not null"`
+	Error     string `gorm:"size:2048"`
+}
+
+// Runtime stores runtime installation metadata.
+type Runtime struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+
+	Name      string `gorm:"size:50;index;not null"`
+	Version   string `gorm:"size:120"`
+	Path      string `gorm:"size:1024"`
+	Installed bool   `gorm:"not null;default:false"`
+}
+
+// Process tracks the process started for a deployment.
+type Process struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+
+	DeploymentID uint   `gorm:"index;not null"`
+	PID          int    `gorm:"index"`
+	Manager      string `gorm:"size:30;not null"` // pm2 | systemd | direct
+	Command      string `gorm:"size:2048;not null"`
+	Status       string `gorm:"size:30;index;not null"`
+}
+
+// EnvironmentVariable stores deployment env vars.
+type EnvironmentVariable struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+
+	DeploymentID uint   `gorm:"index;not null"`
+	Key          string `gorm:"size:255;index;not null"`
+	Value        string `gorm:"size:4096;not null"`
+	Masked       bool   `gorm:"not null;default:false"`
 }

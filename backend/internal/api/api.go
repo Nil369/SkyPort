@@ -2,6 +2,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/gofiber/fiber/v2"
 
 	v1 "skyport/internal/api/v1"
@@ -39,7 +41,8 @@ func rootHandler() fiber.Handler {
 			"service": "SkyPort",
 			"status":  "running",
 			"version": version.Version,
-			"message": "Welcome to SkyPort API",
+			"message": "Welcome to SkyPort API! 🎉",
+			"visit_api_docs": fmt.Sprintf("Visit the API docs at: %s/docs/index.html", c.BaseURL()),
 		})
 	}
 }

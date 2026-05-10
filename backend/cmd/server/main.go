@@ -15,7 +15,7 @@
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Provide the JWT token as: Bearer <token>
+// @description JWT access token — must include Bearer prefix exactly: Bearer eyJ...
 package main
 
 import (
