@@ -1,11 +1,7 @@
-// Package auth will host JWT issuance, validation, and RBAC.
-//
-// Architecture: Middleware is the only HTTP-facing surface; services hold business
-// rules. When JWT lands, inject a TokenVerifier interface from bootstrap so tests can
-// stub verification without touching Fiber.
 package auth
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -15,9 +11,8 @@ import (
 
 const bearerPrefix = "Bearer "
 
-// RequirePlaceholder reserves the /api/v1/protected/* route group shape.
-// Replace with RequireJWT(verifier) without changing router wiring.
-func RequirePlaceholder() fiber.Handler {
+// RequireJWT validates a Bearer access token and stores claims in context.
+func RequireJWT(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		h := c.Get("Authorization")
 		if h == "" || !strings.HasPrefix(h, bearerPrefix) {
@@ -27,8 +22,21 @@ func RequirePlaceholder() fiber.Handler {
 		if raw == "" {
 			return response.Unauthorized(c, "empty bearer token")
 		}
-		// Future: verify JWT, load user, e.g. c.Locals("user", user).
-		_ = raw
-		return response.Unauthorized(c, "jwt authentication not yet implemented")
+		claims, err := ParseAccessToken(raw, secret)
+		if err != nil {
+			return response.Unauthorized(c, "invalid or expired token")
+		}
+		c.Locals("auth_user_id", claims.UserID)
+		c.Locals("auth_user_email", claims.Email)
+		return c.Next()
 	}
+}
+
+func userIDFromCtx(c *fiber.Ctx) (uint, error) {
+	v := c.Locals("auth_user_id")
+	id, ok := v.(uint)
+	if !ok || id == 0 {
+		return 0, fmt.Errorf("unauthenticated")
+	}
+	return id, nil
 }

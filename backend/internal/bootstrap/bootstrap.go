@@ -33,6 +33,7 @@ import (
 	"skyport/internal/httperrors"
 	"skyport/internal/metrics"
 	"skyport/internal/projects"
+	"skyport/internal/system"
 	"skyport/internal/terminal"
 	"skyport/internal/version"
 	"skyport/internal/websocket"
@@ -45,9 +46,13 @@ func Run(cfg *config.Config) error {
 		return err
 	}
 
-	log.Printf("skyport %s starting env=%s listen=http://%s db=%s",
-		version.Version, cfg.Environment, cfg.Addr(), cfg.DBPath)
-	log.Printf("browser (this machine): http://127.0.0.1:%d/api/v1/health", cfg.Port)
+	log.Printf("==============================================")
+	log.Printf(" SkyPort API %s", version.Version)
+	log.Printf(" env=%s listen=http://%s db=%s", cfg.Environment, cfg.Addr(), cfg.DBPath)
+	log.Printf(" modules: terminal=%t metrics=%t docker=%t filesystem=%t projects=%t",
+		cfg.EnableTerminal, cfg.EnableMetrics, cfg.EnableDocker, cfg.EnableFilesystem, cfg.EnableProjects)
+	log.Printf(" routes: GET / | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
+	log.Printf("==============================================")
 
 	go func() {
 		if err := a.Fiber.Listen(cfg.Addr()); err != nil {
@@ -84,12 +89,15 @@ func Build(cfg *config.Config) (*app.App, error) {
 	}
 
 	f := fiber.New(fiber.Config{
-		AppName:               "SkyPort",
-		ReadTimeout:           60 * time.Second,
-		WriteTimeout:          60 * time.Second,
-		IdleTimeout:           120 * time.Second,
-		DisableStartupMessage: true,
-		ErrorHandler:          httperrors.FiberErrorHandler,
+		AppName:                 "SkyPort",
+		BodyLimit:               4 * 1024 * 1024,
+		ReadTimeout:             60 * time.Second,
+		WriteTimeout:            60 * time.Second,
+		IdleTimeout:             120 * time.Second,
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          cfg.TrustedProxies,
+		DisableStartupMessage:   true,
+		ErrorHandler:            httperrors.FiberErrorHandler,
 	})
 
 	container := &app.App{
@@ -98,14 +106,24 @@ func Build(cfg *config.Config) (*app.App, error) {
 		Config: cfg,
 	}
 
-	// Stub modules: expand Register() to mount routes or background workers.
-	container.RegisterModule(&terminal.Module{})
-	container.RegisterModule(metrics.NewModule(cfg.MetricsDiskPath))
-	container.RegisterModule(&docker.Module{})
 	container.RegisterModule(&websocket.Module{})
+	if cfg.EnableTerminal {
+		container.RegisterModule(&terminal.Module{})
+	}
+	if cfg.EnableMetrics {
+		container.RegisterModule(metrics.NewModule(cfg.MetricsDiskPath))
+	}
+	if cfg.EnableDocker {
+		container.RegisterModule(&docker.Module{})
+	}
+	container.RegisterModule(&system.Module{})
 	container.RegisterModule(&deploy.Module{})
-	container.RegisterModule(&filesystem.Module{})
-	container.RegisterModule(&projects.Module{})
+	if cfg.EnableFilesystem {
+		container.RegisterModule(&filesystem.Module{})
+	}
+	if cfg.EnableProjects {
+		container.RegisterModule(&projects.Module{})
+	}
 
 	api.Mount(container)
 

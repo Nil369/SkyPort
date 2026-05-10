@@ -11,7 +11,7 @@ import (
 // For JSON logging to an aggregator, swap the Format/Output fields here in one place.
 func RequestLogger() fiber.Handler {
 	return logger.New(logger.Config{
-		Format:     "${time} | ${status} | ${latency} | ${ip} | ${method} ${path}\n",
+		Format:     "${time} | ${status} | ${latency} | req=${locals:request_id} | ${ip} | ${method} ${path}\n",
 		TimeFormat: time.RFC3339,
 		TimeZone:   "UTC",
 	})

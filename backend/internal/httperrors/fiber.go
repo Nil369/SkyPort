@@ -3,6 +3,7 @@ package httperrors
 
 import (
 	"errors"
+	"log"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -20,6 +21,7 @@ func FiberErrorHandler(c *fiber.Ctx, err error) error {
 	msg := err.Error()
 	if code == fiber.StatusInternalServerError && fe == nil {
 		msg = "internal server error"
+		log.Printf("request_id=%v internal_error=%v path=%s", c.Locals("request_id"), err, c.Path())
 	}
 
 	return response.Error(c, code, statusToCode(code), msg)

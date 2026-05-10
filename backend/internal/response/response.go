@@ -8,9 +8,10 @@ import (
 
 // APIError is the standard error body for versioned APIs.
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Details   any    `json:"details,omitempty"`
 }
 
 // ErrorBody wraps APIError for a stable top-level key.
@@ -30,15 +31,17 @@ func OK(c *fiber.Ctx, body any) error {
 
 // Error sends a structured error. Prefer stable machine-readable Codes for clients.
 func Error(c *fiber.Ctx, status int, code, message string) error {
+	requestID, _ := c.Locals("request_id").(string)
 	return JSON(c, status, ErrorBody{
-		Error: APIError{Code: code, Message: message},
+		Error: APIError{RequestID: requestID, Code: code, Message: message},
 	})
 }
 
 // ErrorWithDetails extends Error with optional structured details (validation errors, etc.).
 func ErrorWithDetails(c *fiber.Ctx, status int, code, message string, details any) error {
+	requestID, _ := c.Locals("request_id").(string)
 	return JSON(c, status, ErrorBody{
-		Error: APIError{Code: code, Message: message, Details: details},
+		Error: APIError{RequestID: requestID, Code: code, Message: message, Details: details},
 	})
 }
 

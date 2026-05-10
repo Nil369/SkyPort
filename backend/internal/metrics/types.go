@@ -3,6 +3,7 @@
 // Scalability: HostSnapshot is the "host" slice of a future union model. Later:
 //   - ContainerSnapshot / ProcessSnapshot embed or extend via dedicated blocks
 //   - FleetSnapshot { Hosts []HostSnapshot } for multi-server aggregation
+//
 // Keep JSON field names stable; bump Schema when breaking.
 package metrics
 

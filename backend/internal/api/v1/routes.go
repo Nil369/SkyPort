@@ -18,8 +18,9 @@ func Mount(a *app.App) {
 	r := a.Fiber.Group("/api/v1")
 
 	r.Get("/health", health(a))
+	auth.Mount(a, r)
 
-	protected := r.Group("/protected", auth.RequirePlaceholder())
+	protected := r.Group("/protected", auth.RequireJWT(a.Config.JWTSecret))
 	protected.Get("/example", protectedExample(a))
 }
 
