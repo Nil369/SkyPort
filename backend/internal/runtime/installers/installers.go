@@ -100,12 +100,13 @@ func Install(ctx context.Context, req Request) (Result, error) {
 
 func commandsFor(rt string) []string {
 	apt := map[string]string{
-		"node":   "apt-get update && apt-get install -y nodejs npm",
+		"node":   "apt-get update && apt-get install -y --no-install-recommends nodejs npm",
 		"bun":    "curl -fsSL https://bun.sh/install | bash",
-		"python": "apt-get update && apt-get install -y python3 python3-pip",
-		"go":     "apt-get update && apt-get install -y golang",
-		"php":    "apt-get update && apt-get install -y php php-cli",
-		"java":   "apt-get update && apt-get install -y default-jre default-jdk",
+		"python": "apt-get update && apt-get install -y --no-install-recommends python3 python3-pip",
+		"go":     "apt-get update && apt-get install -y --no-install-recommends golang",
+		"php":    "apt-get update && apt-get install -y --no-install-recommends php php-cli",
+		"java":   "apt-get update && apt-get install -y --no-install-recommends default-jre default-jdk",
+		"pm2":    "npm install -g pm2",
 	}
 	if runtime.GOOS == "linux" {
 		if c, ok := apt[rt]; ok {
@@ -116,6 +117,8 @@ func commandsFor(rt string) []string {
 	switch rt {
 	case "node":
 		return []string{"winget install OpenJS.NodeJS.LTS"}
+	case "pm2":
+		return []string{"npm install -g pm2"}
 	case "python":
 		return []string{"winget install Python.Python.3.12"}
 	case "go":

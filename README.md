@@ -37,9 +37,11 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 - **Runtime detection** (`POST /api/v1/runtime/detect`): recursive scan under repo (skips `node_modules`, `.git`, …; depth capped), discovers `docker-compose` / Dockerfile / Node / Bun / Python / Go / Rust / Java / PHP, monorepo hints (`server/` vs `client/`), suggests `working_directory` and suggested install/build/start commands.
 - **Capabilities** (`GET /api/v1/system/capabilities`): RAM/swap/cores, Docker CLI vs daemon reachable, coarse deployment recommendation.
 - **Runtime install** (`POST /api/v1/runtime/install`): checks PATH first (skip if already present); `dry_run` overrides `execute` for safety; previews or runs OS-specific installers.
+- **Smart runtime install** (`POST /api/v1/runtime/install/smart`): detects runtime under a repo path and installs minimal dependencies; compose/docker results return Docker install hints.
 - **Deployments** (`/api/v1/deployments`): create/list/get/delete; env vars (+ bulk `.env`-style payload); prefetch **runtime & strategy on create**; `auto_start` runs install/build/start as subprocesses **in resolved working directory**; invalid `working_directory` falls back to detection then repo root; WebSocket **`/ws/deployments/:id/logs`** for streamed logs. *(Request field `port` is reserved—not yet injected into proxy or env automatically.)*
 - **Process manager**: in-process tracker; starts app as **direct subprocess** (`Cmd.Dir` set to resolved app folder).
-- **Proxy**: generates Caddy or Nginx config files under workspace `proxy/` (no live reload / SSL automation yet).
+- **Proxy**: generates Caddy or Nginx config files under workspace `proxy/`; optional reload + SSL helpers (Caddy TLS email / Nginx cert paths + certbot helper).
+- **Orchestrator**: Swarm/K8s helpers (status, deploy, compose convert, K8s manifest generator, and health checks), plus kubectl install helper endpoint.
 - Docker REST module: daemon/containers/images/volumes (operational primitives—**not** the same as full Coolify-style app orchestration yet).
 - WebSocket metrics + terminal where enabled; filesystem; metrics payloads with human-readable sizes.
 

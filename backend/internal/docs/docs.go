@@ -525,6 +525,63 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/deployments/{id}/rollout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Rollout deployment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Deployment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Rollout request",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_deployments.rolloutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/docker/container/{name}": {
             "delete": {
                 "description": "Remove a Docker container by name or ID",
@@ -1335,6 +1392,261 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/orchestrator/compose/convert": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Convert compose for swarm",
+                "parameters": [
+                    {
+                        "description": "Convert input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.convertComposeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orchestrator/deploy": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Orchestrator deploy",
+                "parameters": [
+                    {
+                        "description": "Deploy input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.deployRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orchestrator/health": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Orchestrator health",
+                "parameters": [
+                    {
+                        "description": "Health input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.healthRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orchestrator/k8s/generate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Generate K8s manifests",
+                "parameters": [
+                    {
+                        "description": "K8s generator input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.generateK8sRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orchestrator/k8s/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Install kubectl",
+                "parameters": [
+                    {
+                        "description": "Install input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.k8sInstallRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/orchestrator/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Orchestrator"
+                ],
+                "summary": "Orchestrator status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_orchestrator.statusResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/projects": {
             "get": {
                 "security": [
@@ -1465,6 +1777,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/proxy/certbot": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns or executes a certbot command for Nginx SSL.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Certbot helper",
+                "parameters": [
+                    {
+                        "description": "Certbot input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_proxy.certbotRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/proxy/generate": {
             "post": {
                 "security": [
@@ -1581,6 +1939,98 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/internal_runtime.installRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/runtime/install/smart": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Detects runtime under project_path and installs the minimal recommended runtimes (node + pm2 on low RAM hosts).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runtime"
+                ],
+                "summary": "Smart runtime install",
+                "parameters": [
+                    {
+                        "description": "Smart install input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_runtime.smartInstallRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/runtime/pm2/startup": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates or executes pm2 startup command for host reboot persistence.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runtime"
+                ],
+                "summary": "PM2 startup helper",
+                "parameters": [
+                    {
+                        "description": "PM2 startup input",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_runtime.pm2StartupRequest"
                         }
                     }
                 ],
@@ -1884,6 +2334,29 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 1024
                 },
+                "container_image": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "container_password": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "container_push": {
+                    "type": "boolean"
+                },
+                "container_registry": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "container_tag": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "container_username": {
+                    "type": "string",
+                    "maxLength": 255
+                },
                 "install_cmd": {
                     "type": "string",
                     "maxLength": 1024
@@ -1931,6 +2404,18 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_deployments.rolloutRequest": {
+            "type": "object",
+            "properties": {
+                "mode": {
+                    "type": "string",
+                    "enum": [
+                        "reload",
+                        "restart"
+                    ]
                 }
             }
         },
@@ -2047,6 +2532,210 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_orchestrator.convertComposeRequest": {
+            "type": "object",
+            "required": [
+                "project_path"
+            ],
+            "properties": {
+                "compose_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "output_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "project_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                }
+            }
+        },
+        "internal_orchestrator.deployRequest": {
+            "type": "object",
+            "required": [
+                "project_path",
+                "type"
+            ],
+            "properties": {
+                "compose_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "kube_context": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "manifest_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "namespace": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "project_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "stack_name": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "swarm",
+                        "k8s"
+                    ]
+                }
+            }
+        },
+        "internal_orchestrator.generateK8sRequest": {
+            "type": "object",
+            "required": [
+                "image",
+                "port",
+                "project_path",
+                "runtime"
+            ],
+            "properties": {
+                "app_name": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "health_port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "image": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "liveness_path": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "max_surge": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "max_unavailable": {
+                    "type": "string",
+                    "maxLength": 20
+                },
+                "namespace": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "project_path": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "readiness_path": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "replicas": {
+                    "type": "integer",
+                    "maximum": 50,
+                    "minimum": 1
+                },
+                "runtime": {
+                    "type": "string",
+                    "enum": [
+                        "node",
+                        "python"
+                    ]
+                }
+            }
+        },
+        "internal_orchestrator.healthRequest": {
+            "type": "object",
+            "required": [
+                "type"
+            ],
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "namespace": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "selector": {
+                    "type": "string",
+                    "maxLength": 200
+                },
+                "stack_name": {
+                    "type": "string",
+                    "maxLength": 120
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "swarm",
+                        "k8s"
+                    ]
+                }
+            }
+        },
+        "internal_orchestrator.k8sInstallRequest": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_orchestrator.statusResponse": {
+            "type": "object",
+            "properties": {
+                "docker_available": {
+                    "type": "boolean"
+                },
+                "kube_context": {
+                    "type": "string"
+                },
+                "kubectl_available": {
+                    "type": "boolean"
+                },
+                "swarm_active": {
+                    "type": "boolean"
+                }
+            }
+        },
         "internal_projects.createProjectRequest": {
             "type": "object",
             "required": [
@@ -2084,6 +2773,29 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_proxy.certbotRequest": {
+            "type": "object",
+            "required": [
+                "domain",
+                "email"
+            ],
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "execute": {
+                    "type": "boolean"
+                }
+            }
+        },
         "internal_proxy.generateRequest": {
             "type": "object",
             "required": [
@@ -2091,14 +2803,35 @@ const docTemplate = `{
                 "port"
             ],
             "properties": {
+                "cert_path": {
+                    "type": "string",
+                    "maxLength": 1024
+                },
                 "domain": {
                     "type": "string",
                     "maxLength": 255
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "enable_ssl": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "key_path": {
+                    "type": "string",
+                    "maxLength": 1024
                 },
                 "port": {
                     "type": "integer",
                     "maximum": 65535,
                     "minimum": 1
+                },
+                "reload": {
+                    "type": "boolean"
                 },
                 "type": {
                     "type": "string",
@@ -2220,8 +2953,46 @@ const docTemplate = `{
                         "python",
                         "go",
                         "php",
-                        "java"
+                        "java",
+                        "pm2"
                     ]
+                }
+            }
+        },
+        "internal_runtime.pm2StartupRequest": {
+            "type": "object",
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "home": {
+                    "type": "string",
+                    "maxLength": 2048
+                },
+                "user": {
+                    "type": "string",
+                    "maxLength": 120
+                }
+            }
+        },
+        "internal_runtime.smartInstallRequest": {
+            "type": "object",
+            "required": [
+                "project_path"
+            ],
+            "properties": {
+                "dry_run": {
+                    "type": "boolean"
+                },
+                "execute": {
+                    "type": "boolean"
+                },
+                "project_path": {
+                    "type": "string",
+                    "maxLength": 2048
                 }
             }
         },

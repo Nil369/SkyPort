@@ -2,7 +2,9 @@ package deployments
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -52,6 +54,7 @@ func (m *Module) Register(a *app.App) error {
 	r.Get("/", listDeployments(a))
 	r.Get("/:id", getDeployment(a))
 	r.Delete("/:id", deleteDeployment(a, m))
+	r.Post("/:id/rollout", rolloutDeployment(a, m))
 	r.Post("/:id/env", addEnvVar(a))
 	r.Post("/:id/env/bulk", addEnvVarsBulk(a))
 	r.Get("/:id/env", listEnvVars(a))
@@ -72,13 +75,19 @@ func (m *Module) LogsWebSocket() func(*gws.Conn) {
 }
 
 type CreateDeploymentRequest struct {
-	ProjectID          uint   `json:"project_id" validate:"required"`
-	AutoStart          bool   `json:"auto_start"`
-	Port               int    `json:"port" validate:"omitempty,min=1,max=65535"`
-	WorkingDirectory   string `json:"working_directory" validate:"omitempty,max=512"`
-	StartCmd           string `json:"start_cmd" validate:"omitempty,max=1024"`
-	InstallCmd         string `json:"install_cmd" validate:"omitempty,max=1024"`
-	BuildCmd           string `json:"build_cmd" validate:"omitempty,max=1024"`
+	ProjectID         uint   `json:"project_id" validate:"required"`
+	AutoStart         bool   `json:"auto_start"`
+	Port              int    `json:"port" validate:"omitempty,min=1,max=65535"`
+	WorkingDirectory  string `json:"working_directory" validate:"omitempty,max=512"`
+	StartCmd          string `json:"start_cmd" validate:"omitempty,max=1024"`
+	InstallCmd        string `json:"install_cmd" validate:"omitempty,max=1024"`
+	BuildCmd          string `json:"build_cmd" validate:"omitempty,max=1024"`
+	ContainerRegistry string `json:"container_registry" validate:"omitempty,max=255"`
+	ContainerImage    string `json:"container_image" validate:"omitempty,max=255"`
+	ContainerTag      string `json:"container_tag" validate:"omitempty,max=128"`
+	ContainerPush     bool   `json:"container_push"`
+	ContainerUsername string `json:"container_username" validate:"omitempty,max=255"`
+	ContainerPassword string `json:"container_password" validate:"omitempty,max=255"`
 }
 
 // @Summary Create deployment
@@ -209,27 +218,175 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 
 	log("starting", startCmd)
 	parts := strings.Fields(startCmd)
-	pid, err := m.pm.Start(ctx, process.StartRequest{
-		Manager: d.Strategy,
-		Name:    fmt.Sprintf("deployment-%d", d.ID),
-		Command: parts[0],
-		Args:    parts[1:],
-		Dir:     workRoot,
-		Env:     env,
-	}, logf, logf)
-	if err != nil {
-		_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+	switch strings.ToLower(d.Strategy) {
+	case "docker":
+		imageName := fmt.Sprintf("skyport-deploy-%d", d.ID)
+		imageTag := strings.TrimSpace(req.ContainerTag)
+		if imageTag == "" {
+			imageTag = "latest"
+		}
+		imageRepo := strings.TrimSpace(req.ContainerImage)
+		if imageRepo == "" {
+			imageRepo = imageName
+		}
+		registry := strings.TrimSpace(req.ContainerRegistry)
+		fullImage := imageRepo + ":" + imageTag
+		if registry != "" {
+			fullImage = registry + "/" + fullImage
+		}
+		// Build image
+		buildCmd := fmt.Sprintf("docker build -t %s .", imageName)
+		log("building", buildCmd)
+		if err := runStep(ctx, workRoot, env, buildCmd, logf, m.logs, d.ID); err != nil {
+			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+			return
+		}
+		// Optional registry login + tag + push
+		if req.ContainerPush || req.ContainerImage != "" || registry != "" {
+			if registry != "" && req.ContainerUsername != "" {
+				if err := dockerLogin(ctx, registry, req.ContainerUsername, req.ContainerPassword, logf); err != nil {
+					_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+					return
+				}
+			}
+			tagCmd := fmt.Sprintf("docker tag %s %s", imageName, fullImage)
+			log("building", tagCmd)
+			if err := runStep(ctx, workRoot, env, tagCmd, logf, m.logs, d.ID); err != nil {
+				_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+				return
+			}
+			if req.ContainerPush {
+				pushCmd := fmt.Sprintf("docker push %s", fullImage)
+				log("building", pushCmd)
+				if err := runStep(ctx, workRoot, env, pushCmd, logf, m.logs, d.ID); err != nil {
+					_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+					return
+				}
+			}
+		}
+		// Run container with restart policy
+		containerName := fmt.Sprintf("deployment-%d", d.ID)
+		runParts := []string{"docker", "run", "-d", "--name", containerName, "--restart", "unless-stopped"}
+		if req.Port > 0 {
+			runParts = append(runParts, "-p", fmt.Sprintf("%d:%d", req.Port, req.Port))
+		}
+		// env vars
+		for _, ev := range envs {
+			runParts = append(runParts, "-e", ev.Key+"="+ev.Value)
+		}
+		runImage := imageName
+		if req.ContainerImage != "" || registry != "" {
+			runImage = fullImage
+		}
+		runParts = append(runParts, runImage)
+		runCmd := strings.Join(runParts, " ")
+		log("starting", runCmd)
+		var runOut []byte
+		if filepath.Separator == '\\' {
+			cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", runCmd)
+			cmd.Dir = workRoot
+			cmd.Env = env
+			runOut, err = cmd.CombinedOutput()
+		} else {
+			cmd := exec.CommandContext(ctx, "sh", "-c", runCmd)
+			cmd.Dir = workRoot
+			cmd.Env = env
+			runOut, err = cmd.CombinedOutput()
+		}
+		if err != nil {
+			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+			if logf != nil {
+				_, _ = logf.WriteString(string(runOut))
+			}
+			return
+		}
+		containerID := strings.TrimSpace(string(runOut))
+		_ = a.DB.Create(&models.Process{
+			DeploymentID: d.ID,
+			PID:          0,
+			Manager:      "docker",
+			Command:      containerID,
+			Status:       "running",
+		}).Error
+		_ = a.DB.Model(d).Update("status", "running").Error
+		log("running", fmt.Sprintf("container started id=%s", containerID))
+		return
+	case "pm2":
+		name := fmt.Sprintf("deployment-%d", d.ID)
+		ecosystemPath, ecoErr := writePm2Ecosystem(filepath.Join(deployBase, fmt.Sprintf("%d", d.ID)), name, workRoot, parts, env)
+		if ecoErr != nil {
+			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": ecoErr.Error()}).Error
+			return
+		}
+		// if pm2 already running -> reload, else start
+		pidOut, _ := exec.CommandContext(ctx, "pm2", "pid", name).Output()
+		pidStr := strings.TrimSpace(string(pidOut))
+		if pidStr != "" && pidStr != "0" {
+			cmd := exec.CommandContext(ctx, "pm2", "reload", name, "--update-env")
+			cmd.Dir = workRoot
+			cmd.Env = env
+			cmd.Stdout = logf
+			cmd.Stderr = logf
+			if err := cmd.Run(); err != nil {
+				_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+				return
+			}
+		} else {
+			startArgs := []string{"start", ecosystemPath, "--only", name, "--update-env"}
+			cmd := exec.CommandContext(ctx, "pm2", startArgs...)
+			cmd.Dir = workRoot
+			cmd.Env = env
+			cmd.Stdout = logf
+			cmd.Stderr = logf
+			if err := cmd.Run(); err != nil {
+				_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+				return
+			}
+		}
+		// persist pm2 list for restart after reboot
+		_ = exec.CommandContext(ctx, "pm2", "save").Run()
+		// try to get pid
+		pidOut2, _ := exec.CommandContext(ctx, "pm2", "pid", name).Output()
+		pid2 := 0
+		if p := strings.TrimSpace(string(pidOut2)); p != "" {
+			if v, err := strconv.Atoi(p); err == nil {
+				pid2 = v
+			}
+		}
+		_ = a.DB.Create(&models.Process{
+			DeploymentID: d.ID,
+			PID:          pid2,
+			Manager:      "pm2",
+			Command:      startCmd,
+			Status:       "running",
+		}).Error
+		_ = a.DB.Model(d).Update("status", "running").Error
+		log("running", fmt.Sprintf("pm2 managed app started pid=%d", pid2))
+		return
+	default:
+		pid, err := m.pm.Start(ctx, process.StartRequest{
+			Manager: d.Strategy,
+			Name:    fmt.Sprintf("deployment-%d", d.ID),
+			Command: parts[0],
+			Args:    parts[1:],
+			Dir:     workRoot,
+			Env:     env,
+		}, logf, logf)
+		if err != nil {
+			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+			return
+		}
+		_ = a.DB.Create(&models.Process{
+			DeploymentID: d.ID,
+			PID:          pid,
+			Manager:      d.Strategy,
+			Command:      startCmd,
+			Status:       "running",
+		}).Error
+		_ = a.DB.Model(d).Update("status", "running").Error
+		log("running", fmt.Sprintf("process started pid=%d", pid))
 		return
 	}
-	_ = a.DB.Create(&models.Process{
-		DeploymentID: d.ID,
-		PID:          pid,
-		Manager:      d.Strategy,
-		Command:      startCmd,
-		Status:       "running",
-	}).Error
-	_ = a.DB.Model(d).Update("status", "running").Error
-	log("running", fmt.Sprintf("process started pid=%d", pid))
 }
 
 // resolveDeploymentWorkDir chooses: user's working_directory → detected subdirectory → cloned repo root.
@@ -319,6 +476,107 @@ func runStep(ctx context.Context, dir string, env []string, command string, logf
 		}(rd)
 	}
 	return cmd.Wait()
+}
+
+func dockerLogin(ctx context.Context, registry, username, password string, logf *os.File) error {
+	if username == "" {
+		return nil
+	}
+	args := []string{"login"}
+	if registry != "" {
+		args = append(args, registry)
+	}
+	args = append(args, "-u", username, "--password-stdin")
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	cmd.Stdin = bytes.NewBufferString(password)
+	cmd.Stdout = logf
+	cmd.Stderr = logf
+	return cmd.Run()
+}
+
+func writePm2Ecosystem(baseDir, name, cwd string, parts []string, env []string) (string, error) {
+	if len(parts) == 0 {
+		return "", fmt.Errorf("pm2 start command is empty")
+	}
+	_ = os.MkdirAll(baseDir, 0o755)
+	path := filepath.Join(baseDir, "ecosystem.config.js")
+	cmd := parts[0]
+	args := []string{}
+	if len(parts) > 1 {
+		args = append(args, parts[1:]...)
+	}
+	envMap := map[string]string{}
+	for _, e := range env {
+		if strings.TrimSpace(e) == "" {
+			continue
+		}
+		kv := strings.SplitN(e, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		envMap[kv[0]] = kv[1]
+	}
+	argsJSON, _ := json.Marshal(args)
+	envJSON, _ := json.Marshal(envMap)
+	content := fmt.Sprintf("module.exports = {\n  apps: [{\n    name: %q,\n    cwd: %q,\n    script: %q,\n    args: %s,\n    env: %s,\n    autorestart: true,\n    watch: false\n  }]\n};\n", name, cwd, cmd, string(argsJSON), string(envJSON))
+	return path, os.WriteFile(path, []byte(content), 0o644)
+}
+
+type rolloutRequest struct {
+	Mode string `json:"mode" validate:"omitempty,oneof=reload restart"`
+}
+
+// @Summary Rollout deployment
+// @Tags Deployments
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param id path string true "Deployment ID"
+// @Param request body rolloutRequest false "Rollout request"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} response.ErrorBody
+// @Failure 401 {object} response.ErrorBody
+// @Router /api/v1/deployments/{id}/rollout [post]
+func rolloutDeployment(a *app.App, m *Module) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		var dep models.Deployment
+		if err := a.DB.First(&dep, id).Error; err != nil {
+			return response.Error(c, fiber.StatusNotFound, "deployment_not_found", "deployment not found")
+		}
+		var proc models.Process
+		_ = a.DB.Where("deployment_id = ?", dep.ID).Order("created_at DESC").First(&proc).Error
+		mode := "reload"
+		var req rolloutRequest
+		if err := c.BodyParser(&req); err == nil && req.Mode != "" {
+			mode = req.Mode
+		}
+
+		name := "deployment-" + id
+		switch strings.ToLower(proc.Manager) {
+		case "pm2":
+			cmdArgs := []string{"reload", name, "--update-env"}
+			if mode == "restart" {
+				cmdArgs = []string{"restart", name, "--update-env"}
+			}
+			cmd := exec.Command("pm2", cmdArgs...)
+			if err := cmd.Run(); err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "rollout_failed", err.Error())
+			}
+			return response.OK(c, fiber.Map{"status": "ok", "manager": "pm2", "mode": mode})
+		case "docker":
+			cmd := exec.Command("docker", "restart", name)
+			if err := cmd.Run(); err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "rollout_failed", err.Error())
+			}
+			return response.OK(c, fiber.Map{"status": "ok", "manager": "docker", "mode": "restart"})
+		default:
+			if err := m.pm.Stop(name); err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "rollout_failed", err.Error())
+			}
+			return response.OK(c, fiber.Map{"status": "ok", "manager": "native", "mode": "restart"})
+		}
+	}
 }
 
 // @Summary List deployments

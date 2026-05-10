@@ -38,8 +38,9 @@ import (
 	"skyport/internal/filesystem"
 	"skyport/internal/httperrors"
 	"skyport/internal/metrics"
-	"skyport/internal/proxy"
+	"skyport/internal/orchestrator"
 	"skyport/internal/projects"
+	"skyport/internal/proxy"
 	"skyport/internal/runtime"
 	"skyport/internal/system"
 	"skyport/internal/terminal"
@@ -140,6 +141,7 @@ func Build(cfg *config.Config) (*app.App, error) {
 	container.RegisterModule(&runtime.Module{})
 	container.RegisterModule(deployments.NewModule())
 	container.RegisterModule(&proxy.Module{})
+	container.RegisterModule(&orchestrator.Module{})
 	if cfg.EnableFilesystem {
 		container.RegisterModule(&filesystem.Module{})
 	}

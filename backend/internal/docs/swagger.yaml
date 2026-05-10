@@ -95,6 +95,23 @@ definitions:
       build_cmd:
         maxLength: 1024
         type: string
+      container_image:
+        maxLength: 255
+        type: string
+      container_password:
+        maxLength: 255
+        type: string
+      container_push:
+        type: boolean
+      container_registry:
+        maxLength: 255
+        type: string
+      container_tag:
+        maxLength: 128
+        type: string
+      container_username:
+        maxLength: 255
+        type: string
       install_cmd:
         maxLength: 1024
         type: string
@@ -129,6 +146,14 @@ definitions:
       masked:
         type: boolean
       value:
+        type: string
+    type: object
+  internal_deployments.rolloutRequest:
+    properties:
+      mode:
+        enum:
+        - reload
+        - restart
         type: string
     type: object
   internal_docker.daemonRequest:
@@ -210,6 +235,151 @@ definitions:
     - content
     - path
     type: object
+  internal_orchestrator.convertComposeRequest:
+    properties:
+      compose_path:
+        maxLength: 2048
+        type: string
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      output_path:
+        maxLength: 2048
+        type: string
+      project_path:
+        maxLength: 2048
+        type: string
+    required:
+    - project_path
+    type: object
+  internal_orchestrator.deployRequest:
+    properties:
+      compose_path:
+        maxLength: 2048
+        type: string
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      kube_context:
+        maxLength: 200
+        type: string
+      manifest_path:
+        maxLength: 2048
+        type: string
+      namespace:
+        maxLength: 120
+        type: string
+      project_path:
+        maxLength: 2048
+        type: string
+      stack_name:
+        maxLength: 120
+        type: string
+      type:
+        enum:
+        - swarm
+        - k8s
+        type: string
+    required:
+    - project_path
+    - type
+    type: object
+  internal_orchestrator.generateK8sRequest:
+    properties:
+      app_name:
+        maxLength: 120
+        type: string
+      env:
+        additionalProperties:
+          type: string
+        type: object
+      health_port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      image:
+        maxLength: 255
+        type: string
+      liveness_path:
+        maxLength: 255
+        type: string
+      max_surge:
+        maxLength: 20
+        type: string
+      max_unavailable:
+        maxLength: 20
+        type: string
+      namespace:
+        maxLength: 120
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      project_path:
+        maxLength: 2048
+        type: string
+      readiness_path:
+        maxLength: 255
+        type: string
+      replicas:
+        maximum: 50
+        minimum: 1
+        type: integer
+      runtime:
+        enum:
+        - node
+        - python
+        type: string
+    required:
+    - image
+    - port
+    - project_path
+    - runtime
+    type: object
+  internal_orchestrator.healthRequest:
+    properties:
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      namespace:
+        maxLength: 120
+        type: string
+      selector:
+        maxLength: 200
+        type: string
+      stack_name:
+        maxLength: 120
+        type: string
+      type:
+        enum:
+        - swarm
+        - k8s
+        type: string
+    required:
+    - type
+    type: object
+  internal_orchestrator.k8sInstallRequest:
+    properties:
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+    type: object
+  internal_orchestrator.statusResponse:
+    properties:
+      docker_available:
+        type: boolean
+      kube_context:
+        type: string
+      kubectl_available:
+        type: boolean
+      swarm_active:
+        type: boolean
+    type: object
   internal_projects.createProjectRequest:
     properties:
       git_auth_type:
@@ -236,15 +406,46 @@ definitions:
     required:
     - name
     type: object
-  internal_proxy.generateRequest:
+  internal_proxy.certbotRequest:
     properties:
       domain:
         maxLength: 255
+        type: string
+      dry_run:
+        type: boolean
+      email:
+        maxLength: 255
+        type: string
+      execute:
+        type: boolean
+    required:
+    - domain
+    - email
+    type: object
+  internal_proxy.generateRequest:
+    properties:
+      cert_path:
+        maxLength: 1024
+        type: string
+      domain:
+        maxLength: 255
+        type: string
+      email:
+        maxLength: 255
+        type: string
+      enable_ssl:
+        type: boolean
+      execute:
+        type: boolean
+      key_path:
+        maxLength: 1024
         type: string
       port:
         maximum: 65535
         minimum: 1
         type: integer
+      reload:
+        type: boolean
       type:
         enum:
         - caddy
@@ -334,9 +535,35 @@ definitions:
         - go
         - php
         - java
+        - pm2
         type: string
     required:
     - runtime
+    type: object
+  internal_runtime.pm2StartupRequest:
+    properties:
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      home:
+        maxLength: 2048
+        type: string
+      user:
+        maxLength: 120
+        type: string
+    type: object
+  internal_runtime.smartInstallRequest:
+    properties:
+      dry_run:
+        type: boolean
+      execute:
+        type: boolean
+      project_path:
+        maxLength: 2048
+        type: string
+    required:
+    - project_path
     type: object
   internal_system.gitInstallRequest:
     properties:
@@ -733,6 +960,42 @@ paths:
       security:
       - BearerAuth: []
       summary: Add env vars in bulk
+      tags:
+      - Deployments
+  /api/v1/deployments/{id}/rollout:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Rollout request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_deployments.rolloutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Rollout deployment
       tags:
       - Deployments
   /api/v1/docker/container/{name}:
@@ -1276,6 +1539,164 @@ paths:
       summary: Metrics snapshot
       tags:
       - Websocket
+  /api/v1/orchestrator/compose/convert:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Convert input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_orchestrator.convertComposeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Convert compose for swarm
+      tags:
+      - Orchestrator
+  /api/v1/orchestrator/deploy:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Deploy input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_orchestrator.deployRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Orchestrator deploy
+      tags:
+      - Orchestrator
+  /api/v1/orchestrator/health:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Health input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_orchestrator.healthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Orchestrator health
+      tags:
+      - Orchestrator
+  /api/v1/orchestrator/k8s/generate:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: K8s generator input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_orchestrator.generateK8sRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Generate K8s manifests
+      tags:
+      - Orchestrator
+  /api/v1/orchestrator/k8s/install:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Install input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_orchestrator.k8sInstallRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Install kubectl
+      tags:
+      - Orchestrator
+  /api/v1/orchestrator/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_orchestrator.statusResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Orchestrator status
+      tags:
+      - Orchestrator
   /api/v1/projects:
     get:
       description: Returns list of projects
@@ -1361,6 +1782,35 @@ paths:
       summary: Delete project
       tags:
       - Projects
+  /api/v1/proxy/certbot:
+    post:
+      consumes:
+      - application/json
+      description: Returns or executes a certbot command for Nginx SSL.
+      parameters:
+      - description: Certbot input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_proxy.certbotRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Certbot helper
+      tags:
+      - Proxy
   /api/v1/proxy/generate:
     post:
       consumes:
@@ -1446,6 +1896,65 @@ paths:
       security:
       - BearerAuth: []
       summary: Ensure / install runtime
+      tags:
+      - Runtime
+  /api/v1/runtime/install/smart:
+    post:
+      consumes:
+      - application/json
+      description: Detects runtime under project_path and installs the minimal recommended
+        runtimes (node + pm2 on low RAM hosts).
+      parameters:
+      - description: Smart install input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_runtime.smartInstallRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Smart runtime install
+      tags:
+      - Runtime
+  /api/v1/runtime/pm2/startup:
+    post:
+      consumes:
+      - application/json
+      description: Generates or executes pm2 startup command for host reboot persistence.
+      parameters:
+      - description: PM2 startup input
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_runtime.pm2StartupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: PM2 startup helper
       tags:
       - Runtime
   /api/v1/system/capabilities:
