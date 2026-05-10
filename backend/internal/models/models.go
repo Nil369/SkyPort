@@ -24,7 +24,7 @@ type User struct {
 	ID           uint `gorm:"primaryKey"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" swaggertype:"string"`
 	Email        string         `gorm:"size:255;uniqueIndex;not null"`
 	Name         string         `gorm:"size:120;not null"`
 	PasswordHash string         `gorm:"size:255;not null"`
@@ -35,7 +35,7 @@ type Project struct {
 	ID        uint `gorm:"primaryKey"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
 	Name      string         `gorm:"size:120;not null"`
 	Path      string         `gorm:"size:1024;not null;uniqueIndex"`
 	GitURL    string         `gorm:"size:1024"`

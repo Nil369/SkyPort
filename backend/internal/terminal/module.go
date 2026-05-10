@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/creack/pty"
@@ -15,7 +16,6 @@ import (
 
 	"skyport/internal/app"
 	"skyport/internal/auth"
-	"skyport/internal/middleware"
 	wsinfra "skyport/internal/websocket"
 )
 
@@ -27,25 +27,59 @@ func (m *Module) Register(a *app.App) error {
 	if !a.Config.EnableTerminal {
 		return nil
 	}
+
+	// Middleware for websocket auth - only for /ws/terminal
 	a.Fiber.Use("/ws/terminal", func(c *fiber.Ctx) error {
-		if !gws.IsWebSocketUpgrade(c) {
-			return fiber.ErrUpgradeRequired
-		}
-		origin := c.Get("Origin")
-		if origin != "" && !middleware.IsOriginAllowed(origin, a.Config.AllowedOrigins) {
-			return fiber.ErrForbidden
-		}
-		token := c.Query("token")
-		if token == "" {
-			return fiber.ErrUnauthorized
-		}
-		if _, err := auth.ParseAccessToken(token, a.Config.JWTSecret); err != nil {
-			return fiber.ErrUnauthorized
+		// Detect websocket upgrade (Connection may contain multiple tokens)
+		connHdr := strings.ToLower(c.Get("Connection"))
+		upgHdr := strings.ToLower(c.Get("Upgrade"))
+		if strings.Contains(connHdr, "upgrade") && strings.Contains(upgHdr, "websocket") {
+			// Extract token from query param, Authorization header, or Sec-WebSocket-Protocol
+			token := strings.TrimSpace(c.Query("token"))
+			if token == "" {
+				authHeader := strings.TrimSpace(c.Get("Authorization"))
+				if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+					token = strings.TrimSpace(authHeader[len("Bearer "):])
+				} else if authHeader != "" {
+					token = authHeader
+				}
+			}
+			if token == "" {
+				// Some websocket clients send token in Sec-WebSocket-Protocol
+				proto := strings.TrimSpace(c.Get("Sec-WebSocket-Protocol"))
+				if proto != "" {
+					token = proto
+				}
+			}
+
+			if token == "" {
+				c.Set("X-Auth-Failed", "true")
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+
+			// Validate token
+			if _, err := auth.ParseAccessToken(token, a.Config.JWTSecret); err != nil {
+				c.Set("X-Auth-Failed", "true")
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
 		}
 		return c.Next()
 	})
 
-	a.Fiber.Get("/ws/terminal", gws.New(func(conn *gws.Conn) {
+	// Register websocket handler
+	a.Fiber.Get("/ws/terminal", gws.New(terminalHandler()))
+	return nil
+}
+
+// terminalHandler opens an interactive terminal WebSocket session.
+// @Summary Interactive terminal (WebSocket)
+// @Tags Websocket
+// @Description Opens an interactive shell session over WebSocket
+// @Description Connect via ws://host/ws/terminal?token=<JWT> or with Authorization: Bearer <JWT> header
+// @Description Send resize control: {"type":"resize","cols":80,"rows":24}
+// @Router /ws/terminal [get]
+func terminalHandler() func(*gws.Conn) {
+	return func(conn *gws.Conn) {
 		sessionID := uuid.NewString()
 		manager := wsinfra.GlobalManager()
 		client := &wsinfra.Client{
@@ -57,8 +91,7 @@ func (m *Module) Register(a *app.App) error {
 		manager.Register(client)
 		defer manager.Unregister(sessionID)
 		runPTYSession(conn, client)
-	}))
-	return nil
+	}
 }
 
 type controlMessage struct {

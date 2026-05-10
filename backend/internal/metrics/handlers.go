@@ -19,7 +19,19 @@ const (
 
 // registerHTTP mounts REST endpoints on the Fiber app.
 func registerHTTP(a *app.App) {
-	a.Fiber.Get("/api/v1/metrics", func(c *fiber.Ctx) error {
+	a.Fiber.Get("/api/v1/metrics", metricsHandler(a))
+}
+
+// metricsHandler returns the latest metrics snapshot.
+// @Summary Metrics snapshot
+// @Tags Websocket
+// @Description Returns the latest metrics snapshot
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Failure 503 {object} response.ErrorBody
+// @Router /api/v1/metrics [get]
+func metricsHandler(a *app.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		if a.Metrics == nil {
 			return response.Error(c, fiber.StatusServiceUnavailable, "metrics_unavailable", "metrics service not initialized")
 		}
@@ -28,7 +40,7 @@ func registerHTTP(a *app.App) {
 			return response.Error(c, fiber.StatusInternalServerError, "metrics_collect_failed", err.Error())
 		}
 		return c.JSON(snap)
-	})
+	}
 }
 
 // registerWebSocket mounts /ws/metrics with push-only streaming.
@@ -38,7 +50,17 @@ func registerHTTP(a *app.App) {
 // disconnects or WriteMessage fails, the handler returns, defer stops the ticker, and
 // the library releases the pooled Conn (no leaked tickers or goroutines).
 func registerWebSocket(a *app.App) {
-	a.Fiber.Get("/ws/metrics", websocket.New(func(c *websocket.Conn) {
+	a.Fiber.Get("/ws/metrics", websocket.New(metricsWebSocketHandler(a)))
+}
+
+// metricsWebSocketHandler streams periodic metrics snapshots over WebSocket.
+// @Summary Metrics stream (WebSocket)
+// @Tags Websocket
+// @Description Streams metrics snapshots every 2 seconds over WebSocket
+// @Description Connect via ws://host/ws/metrics?token=<JWT> or with Authorization: Bearer <JWT> header
+// @Router /ws/metrics [get]
+func metricsWebSocketHandler(a *app.App) func(c *websocket.Conn) {
+	return func(c *websocket.Conn) {
 		if a.Metrics == nil {
 			_ = c.WriteMessage(websocket.TextMessage, []byte(`{"error":{"code":"metrics_unavailable","message":"metrics service not initialized"}}`))
 			_ = c.Close()
@@ -88,5 +110,5 @@ func registerWebSocket(a *app.App) {
 				return
 			}
 		}
-	}))
+	}
 }

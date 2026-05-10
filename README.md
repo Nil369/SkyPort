@@ -6,7 +6,7 @@
 
 Self-hosted infrastructure for developers who want a calm, modern control plane on a small VPS—without sacrificing ambition.
 
-> **Status:** Early-stage and **actively developed**. SkyPort is **not** production-complete yet. The backend is taking shape; the dashboard is mostly scaffolding. We’re shipping in the open and inviting the community to help define what comes next.
+> **Status:** Early-stage and **actively developed**. The backend now includes Swagger docs, REST APIs, WebSocket routes, filesystem operations, Docker controls, and project cloning. The dashboard is still scaffolding.
 
 ---
 
@@ -28,47 +28,15 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 
 ---
 
-## Current progress
+## Implemented so far
 
-| Area | State |
-|------|--------|
-| **Backend architecture** | Modular layout (API, auth placeholder, config, DB, middleware, versioned routes). |
-| **HTTP API** | Fiber server, graceful shutdown, health endpoint. |
-| **Persistence** | SQLite + GORM with auto-migration hooks. |
-| **Configuration** | Environment-driven config + optional `.env` for local dev. |
-| **Realtime metrics** | **In active development** — host metrics (REST / WebSocket) are being hardened; behavior may change between commits. |
-| **Frontend** | Vite + React + TypeScript scaffold; **dashboard UI not implemented yet** (no polished monitoring UI to show). |
-| **Installer / one-command deploy** | Planned; not the focus of this first public drop. |
-
-### Roadmap checklist
-
-**Completed (initial milestone)**
-
-- [x] Modular Go backend (`cmd/server`, `internal/*` packages)
-- [x] Fiber HTTP server with recovery + request logging
-- [x] SQLite + GORM initialization and auto-migration pattern
-- [x] App container (`Fiber`, `DB`, `Config`, pluggable modules)
-- [x] Environment-based configuration + graceful shutdown
-- [x] Versioned API layout (`/api/v1/...`)
-- [x] `GET /api/v1/health`
-- [x] JWT route shape placeholder (auth not finished)
-
-**In progress**
-
-- [ ] **Host metrics** — REST + WebSocket streaming, tuning for small VPS *(active development)*
-- [ ] Error semantics + API docs as endpoints stabilize
-
-**Planned**
-
-- [ ] Realtime monitoring UI (dashboard)
-- [ ] Terminal in the browser
-- [ ] File manager
-- [ ] Docker management
-- [ ] Deployments & git integration
-- [ ] Cloud IDE experience
-- [ ] Multi-server aggregation
-- [ ] AI-assisted workflows (optional integrations)
-- [ ] Single-command install / provisioning story
+- Modular Go backend with Fiber, SQLite/GORM, config, middleware, and versioned routes.
+- Swagger/OpenAPI docs generated from handler annotations.
+- REST endpoints for health, metrics, auth, filesystem, projects, system, and Docker.
+- WebSocket endpoints for metrics and terminal under the `Websocket` Swagger group.
+- Filesystem endpoints support absolute paths, upload, download, read, rename, and delete.
+- Project creation supports `git clone` for public repos and PAT/SSH-based private clone flows.
+- Docker endpoints cover daemon status/control and container lifecycle actions.
 
 ---
 
@@ -97,32 +65,6 @@ SkyPort/
 | Frontend | React, TypeScript, [Vite](https://vitejs.dev/) |
 | Styling | Tailwind CSS *(planned for dashboard UI; scaffold may not include it yet)* |
 | Metrics | [gopsutil](https://github.com/shirou/gopsutil) *(host metrics — in development)* |
-
----
-
-## Repository structure
-
-```text
-.
-├── backend/
-│   ├── cmd/server/           # Main entrypoint
-│   ├── internal/
-│   │   ├── api/              # HTTP composition, v1 routes
-│   │   ├── app/              # Dependency injection root
-│   │   ├── auth/             # JWT placeholder
-│   │   ├── bootstrap/        # Startup / shutdown
-│   │   ├── config/           # Env configuration
-│   │   ├── database/         # GORM + SQLite
-│   │   ├── metrics/          # Host metrics (evolving)
-│   │   ├── middleware/
-│   │   └── …                 # terminal, docker, deploy, … stubs
-│   └── go.mod
-├── frontend/                 # Dashboard (early)
-├── LICENSE                   # AGPL-3.0
-├── NOTICE                    # Community vs future commercial editions
-├── .env.example              # Environment template
-└── README.md
-```
 
 ---
 
@@ -212,18 +154,35 @@ Example response:
 curl -s http://127.0.0.1:8080/api/v1/metrics | jq .
 ```
 
-**WebSocket** *(metrics stream — evolving)*
+**WebSockets** *(metrics & terminal)*
 
-Connect a WebSocket client to `ws://127.0.0.1:8080/ws/metrics` (adjust host/port). Frames are JSON snapshots; treat field names as stable only after the first tagged release.
+SkyPort exposes two WebSocket channels:
+
+- `ws://<host>:<port>/ws/metrics` — push-only metrics stream (JSON snapshots every 2s). Use this for realtime host monitoring.
+- `ws://<host>:<port>/ws/terminal` — interactive shell session (PTY over WebSocket). Requires a valid JWT (see auth) and supports a small JSON control message to resize the PTY:
+
+  Resize example (Text frame):
+
+  ```json
+  {"type":"resize","cols":80,"rows":24}
+  ```
+
+Authentication: provide a JWT either as `?token=<JWT>` query param, via an `Authorization: Bearer <JWT>` header, or in the `Sec-WebSocket-Protocol` header for clients that prefer sending protocols. Example `wscat` usage:
+
+```bash
+# Metrics (no write expected back):
+wscat -c "ws://127.0.0.1:8080/ws/metrics?token=$TOKEN"
+
+# Terminal (interactive):
+wscat -c "ws://127.0.0.1:8080/ws/terminal?token=$TOKEN"
+```
+
+Swagger groups both routes under `Websocket`, but the UI cannot perform a real WebSocket upgrade. Use a WebSocket client such as `wscat`, a browser client, or Postman WebSocket tab.
 
 ---
 
 ## Screenshots
 
-<!-- Add images once the dashboard exists -->
-| Dashboard (coming soon) | Metrics UI (planned) |
-|-------------------------|----------------------|
-| *Placeholder*           | *Placeholder*        |
 
 ---
 
@@ -241,7 +200,7 @@ If AGPL is a blocker for your organization, reach out via discussions; we’re o
 
 ---
 
-## Contributing
+## 🤝Contributing
 
 We love early contributors—especially docs, DX, and small API improvements.
 
@@ -252,7 +211,7 @@ We love early contributors—especially docs, DX, and small API improvements.
 
 ---
 
-## Security
+## 🔒Security
 
 **Please do not** open public issues for undisclosed vulnerabilities.
 
@@ -281,20 +240,21 @@ We love early contributors—especially docs, DX, and small API improvements.
 
 ## Credits
 
-**SkyPort** is initiated and maintained with **Akash Halder Technologia** as the brand home for the project.  
+**SkyPort** is initiated and maintained by Akash Halder (Nil369), Founder of **Akash Halder Technologia** as the brand home for the project.  
+
 Thank you to everyone who files issues, sends patches, and self-hosts early builds—you shape what SkyPort becomes.
 
 ---
 
-## License
+## 📄License
 
-Copyright © Akash Halder Technologia and contributors.
+Copyright © **Nil369**, Founder of  ***Akash Halder Technologia*** and contributors.
 
 Licensed under the **GNU Affero General Public License v3.0**. See [LICENSE](./LICENSE).
 
 ---
 
-## Support the project
+## 🙏 Support the project
 
 If SkyPort saves you time or infra cost:
 
@@ -304,50 +264,3 @@ If SkyPort saves you time or infra cost:
 - When Pro/Enterprise exists, consider them if you need **commercial licensing** or **priority support**—the community edition remains the AGPL backbone.
 
 ---
-
-## Maintainer cheat sheet (GitHub)
-
-Use this when configuring the repository on GitHub.
-
-**Suggested repository description (short)**
-
-> SkyPort — lightweight self-hosted developer cloud OS (Go + React). AGPLv3. Built for small VPS; dashboard and modules in active development.
-
-**Suggested topics / tags**
-
-`self-hosted` `developer-tools` `vps` `go` `golang` `fiber` `react` `typescript` `sqlite` `gorm` `websocket` `devops` `infrastructure` `open-source` `agpl` `dashboard` `monitoring`
-
-**Suggested issue labels**
-
-| Label | Color idea | Use |
-|-------|------------|-----|
-| `type:bug` | red | Defects |
-| `type:feature` | blue | New capability |
-| `type:docs` | green | Documentation |
-| `type:dx` | teal | Developer experience / tooling |
-| `priority:P1` | orange | Urgent |
-| `good first issue` | light green | Onboarding |
-| `area:backend` | gray | Go API |
-| `area:frontend` | purple | React UI |
-| `area:metrics` | yellow | Metrics / observability |
-| `blocked` | dark red | Waiting on dependency |
-
-**Semantic versioning**
-
-- **0.y.z** until the API and dashboard are stable enough for cautious production pilots.
-- **1.0.0** when we commit to backward-compatible HTTP API semantics and migration notes for self-hosters.
-- Breaking API changes: **major** bump; additive endpoints: **minor**; fixes: **patch**.
-
-**Suggested first release tag**
-
-`v0.1.0` — *first public snapshot* (documentation + current code; explicitly “early”).
-
-**Suggested first commit message**
-
-```text
-chore: initial public snapshot (backend scaffold, AGPLv3, README)
-
-- Add modular Go API (Fiber, SQLite/GORM, health, metrics WIP)
-- Add React/Vite frontend scaffold
-- Add AGPL-3.0, NOTICE, and .env.example
-```

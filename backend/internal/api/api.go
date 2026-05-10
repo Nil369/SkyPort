@@ -4,7 +4,7 @@ package api
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"skyport/internal/api/v1"
+	v1 "skyport/internal/api/v1"
 	"skyport/internal/app"
 	"skyport/internal/middleware"
 	"skyport/internal/response"
@@ -21,14 +21,25 @@ func Mount(a *app.App) {
 	a.Fiber.Use(middleware.CORS(a.Config.AllowedOrigins))
 	a.Fiber.Use(middleware.RateLimitPlaceholder())
 
-	a.Fiber.Get("/", func(c *fiber.Ctx) error {
+	a.Fiber.Get("/", rootHandler())
+
+	v1.Mount(a)
+}
+
+// rootHandler returns the service root metadata.
+// @Summary Root
+// @Tags Root
+// @Description Service root with basic metadata
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router / [get]
+func rootHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{
 			"service": "SkyPort",
 			"status":  "running",
 			"version": version.Version,
 			"message": "Welcome to SkyPort API",
 		})
-	})
-
-	v1.Mount(a)
+	}
 }

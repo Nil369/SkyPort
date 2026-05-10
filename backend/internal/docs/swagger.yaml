@@ -1,0 +1,865 @@
+basePath: /
+definitions:
+  internal_auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: string
+      refresh_token:
+        description: Future-ready placeholder; currently not issued.
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/internal_auth.UserDTO'
+    type: object
+  internal_auth.LoginRequest:
+    properties:
+      email:
+        maxLength: 255
+        type: string
+      password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_auth.RegisterRequest:
+    properties:
+      email:
+        maxLength: 255
+        type: string
+      name:
+        maxLength: 120
+        minLength: 2
+        type: string
+      password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  internal_auth.UserDTO:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  internal_docker.daemonRequest:
+    properties:
+      action:
+        enum:
+        - start
+        - stop
+        - restart
+        type: string
+    required:
+    - action
+    type: object
+  internal_filesystem.createFolderRequest:
+    properties:
+      path:
+        maxLength: 2048
+        type: string
+    required:
+    - path
+    type: object
+  internal_filesystem.readFileRequest:
+    properties:
+      path:
+        maxLength: 2048
+        type: string
+    required:
+    - path
+    type: object
+  internal_filesystem.renameRequest:
+    properties:
+      new_path:
+        maxLength: 2048
+        type: string
+      old_path:
+        maxLength: 2048
+        type: string
+    required:
+    - new_path
+    - old_path
+    type: object
+  internal_projects.createProjectRequest:
+    properties:
+      git_auth_type:
+        enum:
+        - ssh
+        - pat
+        type: string
+      git_pat:
+        type: string
+      git_ssh_key:
+        type: string
+      git_url:
+        maxLength: 1024
+        type: string
+      name:
+        maxLength: 120
+        minLength: 2
+        type: string
+      private:
+        type: boolean
+    required:
+    - name
+    type: object
+  models.Project:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      gitURL:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      path:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  response.APIError:
+    properties:
+      code:
+        type: string
+      details:
+        type: any
+      message:
+        type: string
+      request_id:
+        type: string
+    type: object
+  response.ErrorBody:
+    properties:
+      error:
+        $ref: '#/definitions/response.APIError'
+    type: object
+  skyport_internal_auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_at:
+        type: string
+      refresh_token:
+        description: Future-ready placeholder; currently not issued.
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/skyport_internal_auth.UserDTO'
+    type: object
+  skyport_internal_auth.LoginRequest:
+    properties:
+      email:
+        maxLength: 255
+        type: string
+      password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  skyport_internal_auth.RegisterRequest:
+    properties:
+      email:
+        maxLength: 255
+        type: string
+      name:
+        maxLength: 120
+        minLength: 2
+        type: string
+      password:
+        maxLength: 128
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  skyport_internal_auth.UserDTO:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  skyport_internal_docker.daemonRequest:
+    properties:
+      action:
+        enum:
+        - start
+        - stop
+        - restart
+        type: string
+    required:
+    - action
+    type: object
+  skyport_internal_filesystem.createFolderRequest:
+    properties:
+      path:
+        maxLength: 2048
+        type: string
+    required:
+    - path
+    type: object
+  skyport_internal_filesystem.readFileRequest:
+    properties:
+      path:
+        maxLength: 2048
+        type: string
+    required:
+    - path
+    type: object
+  skyport_internal_filesystem.renameRequest:
+    properties:
+      new_path:
+        maxLength: 2048
+        type: string
+      old_path:
+        maxLength: 2048
+        type: string
+    required:
+    - new_path
+    - old_path
+    type: object
+  skyport_internal_projects.createProjectRequest:
+    properties:
+      git_auth_type:
+        enum:
+        - ssh
+        - pat
+        type: string
+      git_pat:
+        type: string
+      git_ssh_key:
+        type: string
+      git_url:
+        maxLength: 1024
+        type: string
+      name:
+        maxLength: 120
+        minLength: 2
+        type: string
+      private:
+        type: boolean
+    required:
+    - name
+    type: object
+host: localhost
+info:
+  contact:
+    email: support@skyport.example
+    name: SkyPort Maintainers
+  description: 'Provide the JWT token as: Bearer <token>'
+  license:
+    name: MIT
+  title: SkyPort API
+  version: 0.0.1
+paths:
+  /:
+    get:
+      description: Service root with basic metadata
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Root
+      tags:
+      - Root
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and return JWT access token
+      parameters:
+      - description: Login payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_auth.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Login
+      tags:
+      - Auth
+  /api/v1/auth/logout:
+    post:
+      description: Logout (placeholder)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Logout
+      tags:
+      - Auth
+  /api/v1/auth/me:
+    get:
+      description: Returns details about the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_auth.UserDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Current user
+      tags:
+      - Auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Registration payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_auth.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Register user
+      tags:
+      - Auth
+  /api/v1/docker/container/{name}:
+    delete:
+      description: Remove a Docker container by name or ID
+      parameters:
+      - description: Container name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete container
+      tags:
+      - Docker
+  /api/v1/docker/container/{name}/restart:
+    post:
+      description: Restart a Docker container by name or ID
+      parameters:
+      - description: Container name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Restart container
+      tags:
+      - Docker
+  /api/v1/docker/container/{name}/start:
+    post:
+      description: Start a Docker container by name or ID
+      parameters:
+      - description: Container name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Start container
+      tags:
+      - Docker
+  /api/v1/docker/container/{name}/stop:
+    post:
+      description: Stop a Docker container by name or ID
+      parameters:
+      - description: Container name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Stop container
+      tags:
+      - Docker
+  /api/v1/docker/containers:
+    get:
+      description: List all Docker containers (running and stopped)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: List containers
+      tags:
+      - Docker
+  /api/v1/docker/daemon:
+    post:
+      consumes:
+      - application/json
+      description: Start, stop, or restart the Docker daemon
+      parameters:
+      - description: Daemon control request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_docker.daemonRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Control Docker daemon
+      tags:
+      - Docker
+  /api/v1/docker/start:
+    post:
+      description: Start the Docker daemon
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Start Docker daemon
+      tags:
+      - Docker
+  /api/v1/docker/status:
+    get:
+      description: Returns whether Docker is installed and daemon status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Docker status
+      tags:
+      - Docker
+  /api/v1/docker/stop:
+    post:
+      description: Stop the Docker daemon
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Stop Docker daemon
+      tags:
+      - Docker
+  /api/v1/files:
+    delete:
+      description: Deletes the file or folder at an absolute path
+      parameters:
+      - description: Absolute path to delete
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Delete file or folder
+      tags:
+      - Filesystem
+    get:
+      description: List files and folders at an absolute path on the VPS
+      parameters:
+      - description: Absolute path on VPS (e.g., /home, C:\\Users on Windows)
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: List files
+      tags:
+      - Filesystem
+  /api/v1/files/download:
+    get:
+      description: Download a file from an absolute path on the VPS
+      parameters:
+      - description: Absolute file path on VPS
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Download file
+      tags:
+      - Filesystem
+  /api/v1/files/folder:
+    post:
+      consumes:
+      - application/json
+      description: Create a folder at an absolute path on the VPS
+      parameters:
+      - description: Create folder payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skyport_internal_filesystem.createFolderRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Create folder
+      tags:
+      - Filesystem
+  /api/v1/files/read:
+    post:
+      consumes:
+      - application/json
+      description: Read file content as text (for text files)
+      parameters:
+      - description: Read file payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skyport_internal_filesystem.readFileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Read file
+      tags:
+      - Filesystem
+  /api/v1/files/rename:
+    patch:
+      consumes:
+      - application/json
+      description: Rename a file or folder using absolute paths
+      parameters:
+      - description: Rename payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skyport_internal_filesystem.renameRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Rename file or folder
+      tags:
+      - Filesystem
+  /api/v1/files/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file to an absolute path on the VPS
+      parameters:
+      - description: Absolute destination path on VPS
+        in: formData
+        name: path
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Upload file
+      tags:
+      - Filesystem
+  /api/v1/health:
+    get:
+      description: Returns service health, version and service name
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check
+      tags:
+      - Health
+  /api/v1/metrics:
+    get:
+      description: Returns the latest metrics snapshot
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Metrics snapshot
+      tags:
+      - Websocket
+  /api/v1/projects:
+    get:
+      description: Returns list of projects
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Project'
+            type: array
+      summary: List projects
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      description: Create a new project record and workspace directory. If git_url
+        is provided, clones the repository (public repos only for now).
+      parameters:
+      - description: Create project payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skyport_internal_projects.createProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Project'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Create project
+      tags:
+      - Projects
+  /api/v1/projects/{id}:
+    delete:
+      description: Delete a project by ID
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorBody'
+      summary: Delete project
+      tags:
+      - Projects
+  /api/v1/system/info:
+    get:
+      description: Returns host and runtime information (OS, memory, cpu, uptime)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: System info
+      tags:
+      - System
+  /ws/metrics:
+    get:
+      description: |-
+        Streams metrics snapshots every 2 seconds over WebSocket
+        Connect via ws://host/ws/metrics?token=<JWT> or with Authorization: Bearer <JWT> header
+      responses: {}
+      summary: Metrics stream (WebSocket)
+      tags:
+      - Websocket
+  /ws/terminal:
+    get:
+      description: |-
+        Opens an interactive shell session over WebSocket
+        Connect via ws://host/ws/terminal?token=<JWT> or with Authorization: Bearer <JWT> header
+        Send resize control: {"type":"resize","cols":80,"rows":24}
+      responses: {}
+      summary: Interactive terminal (WebSocket)
+      tags:
+      - Websocket
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

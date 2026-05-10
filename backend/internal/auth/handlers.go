@@ -10,6 +10,17 @@ import (
 	"skyport/internal/validator"
 )
 
+// registerHandler handles user registration.
+// @Summary Register user
+// @Tags Auth
+// @Description Register a new user account
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "Registration payload"
+// @Success 201 {object} AuthResponse
+// @Failure 400 {object} response.ErrorBody
+// @Failure 409 {object} response.ErrorBody
+// @Router /api/v1/auth/register [post]
 func registerHandler(svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req RegisterRequest
@@ -24,6 +35,17 @@ func registerHandler(svc *Service) fiber.Handler {
 	}
 }
 
+// loginHandler handles user login and issues JWT tokens.
+// @Summary Login
+// @Tags Auth
+// @Description Authenticate user and return JWT access token
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login payload"
+// @Success 200 {object} AuthResponse
+// @Failure 400 {object} response.ErrorBody
+// @Failure 401 {object} response.ErrorBody
+// @Router /api/v1/auth/login [post]
 func loginHandler(svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req LoginRequest
@@ -43,6 +65,13 @@ func loginHandler(svc *Service) fiber.Handler {
 	}
 }
 
+// logoutHandler is a placeholder for logout actions.
+// @Summary Logout
+// @Tags Auth
+// @Description Logout (placeholder)
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Router /api/v1/auth/logout [post]
 func logoutHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		// Placeholder for refresh-token invalidation and cookie clearing.
@@ -50,6 +79,15 @@ func logoutHandler() fiber.Handler {
 	}
 }
 
+// meHandler returns the currently authenticated user.
+// @Summary Current user
+// @Tags Auth
+// @Description Returns details about the authenticated user
+// @Produce json
+// @Success 200 {object} UserDTO
+// @Failure 401 {object} response.ErrorBody
+// @Security BearerAuth
+// @Router /api/v1/auth/me [get]
 func meHandler(svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		userID, err := userIDFromCtx(c)

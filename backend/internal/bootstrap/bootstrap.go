@@ -16,12 +16,17 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	swagger "github.com/swaggo/fiber-swagger"
+
+	docs "skyport/internal/docs"
 
 	"skyport/internal/api"
 	"skyport/internal/app"
@@ -52,6 +57,7 @@ func Run(cfg *config.Config) error {
 	log.Printf(" modules: terminal=%t metrics=%t docker=%t filesystem=%t projects=%t",
 		cfg.EnableTerminal, cfg.EnableMetrics, cfg.EnableDocker, cfg.EnableFilesystem, cfg.EnableProjects)
 	log.Printf(" routes: GET / | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
+	log.Printf(" docs: GET /docs/index.html")
 	log.Printf("==============================================")
 
 	go func() {
@@ -83,6 +89,8 @@ func Run(cfg *config.Config) error {
 
 // Build constructs the app container without listening—useful for integration tests.
 func Build(cfg *config.Config) (*app.App, error) {
+	cfg.AllowedOrigins = mergeAllowedOrigins(cfg)
+
 	db, err := database.Initialize(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
@@ -105,6 +113,14 @@ func Build(cfg *config.Config) (*app.App, error) {
 		DB:     db,
 		Config: cfg,
 	}
+
+	docs.SwaggerInfo.Host = swaggerHost(cfg)
+	docs.SwaggerInfo.BasePath = "/"
+	docs.SwaggerInfo.Schemes = []string{"http"}
+
+	// Expose Swagger UI at /docs/* (serves index.html at /docs/index.html)
+	container.Fiber.Get("/docs/*", swagger.WrapHandler)
+	container.Fiber.Get("/docs", func(c *fiber.Ctx) error { return c.Redirect("/docs/index.html") })
 
 	container.RegisterModule(&websocket.Module{})
 	if cfg.EnableTerminal {
@@ -134,4 +150,53 @@ func Build(cfg *config.Config) (*app.App, error) {
 	}
 
 	return container, nil
+}
+
+func swaggerHost(cfg *config.Config) string {
+	if raw := strings.TrimSpace(cfg.PublicURL); raw != "" {
+		if parsed, err := url.Parse(raw); err == nil && parsed.Host != "" {
+			return parsed.Host
+		}
+	}
+	host := strings.TrimSpace(cfg.Host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return fmt.Sprintf("%s:%d", host, cfg.Port)
+}
+
+func mergeAllowedOrigins(cfg *config.Config) []string {
+	origins := make([]string, 0, len(cfg.AllowedOrigins)+3)
+	seen := map[string]struct{}{}
+	add := func(origin string) {
+		origin = strings.TrimSpace(origin)
+		if origin == "" {
+			return
+		}
+		if _, ok := seen[origin]; ok {
+			return
+		}
+		seen[origin] = struct{}{}
+		origins = append(origins, origin)
+	}
+
+	for _, origin := range cfg.AllowedOrigins {
+		add(origin)
+	}
+
+	if raw := strings.TrimSpace(cfg.PublicURL); raw != "" {
+		add(raw)
+		return origins
+	}
+
+	host := strings.TrimSpace(cfg.Host)
+	switch host {
+	case "", "0.0.0.0", "::":
+		add(fmt.Sprintf("http://localhost:%d", cfg.Port))
+		add(fmt.Sprintf("http://127.0.0.1:%d", cfg.Port))
+	default:
+		add(fmt.Sprintf("http://%s:%d", host, cfg.Port))
+	}
+
+	return origins
 }
