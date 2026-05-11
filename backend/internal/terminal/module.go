@@ -24,8 +24,6 @@ import (
 )
 
 const (
-	wsReadTimeout  = 120 * time.Second
-	wsPingInterval = 30 * time.Second
 	wsWriteTimeout = 15 * time.Second
 )
 
@@ -130,15 +128,6 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 		return conn.WriteMessage(mt, payload)
 	}
 
-	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	})
-
-	stopPing := make(chan struct{})
-	go pingLoop(write, stopPing)
-	defer close(stopPing)
-
 	f, err := pty.Start(cmd)
 	if err != nil {
 		if runtime.GOOS == "windows" {
@@ -192,7 +181,6 @@ func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
 			if err != nil {
 				return
 			}
-			_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 			if t == gws.TextMessage && len(data) > 0 && data[0] == '{' {
 				var ctrl controlMessage
 				if json.Unmarshal(data, &ctrl) == nil && ctrl.Type == "resize" && ctrl.Cols > 0 && ctrl.Rows > 0 {
@@ -219,14 +207,6 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 		_ = conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
 		return conn.WriteMessage(mt, payload)
 	}
-
-	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
-	})
-	stopPing := make(chan struct{})
-	go pingLoop(write, stopPing)
-	defer close(stopPing)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -291,7 +271,6 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 			if err != nil {
 				return true
 			}
-			_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
 			if t == gws.TextMessage && len(data) > 0 && data[0] == '{' {
 				// Resize is ignored for pipe fallback mode on Windows.
 				continue
@@ -299,21 +278,6 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 			input := normalizeInput(data)
 			if _, err := stdin.Write(input); err != nil {
 				return true
-			}
-		}
-	}
-}
-
-func pingLoop(write func(int, []byte) error, stop <-chan struct{}) {
-	ticker := time.NewTicker(wsPingInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			if err := write(gws.PingMessage, []byte("ping")); err != nil {
-				return
 			}
 		}
 	}

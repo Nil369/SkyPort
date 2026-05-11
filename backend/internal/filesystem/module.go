@@ -303,7 +303,12 @@ func downloadHandler() fiber.Handler {
 			return c.Download(zipPath, filepath.Base(targetPath)+".zip")
 		}
 
-		// Force download with Content-Disposition header
+		if c.Query("inline") == "1" {
+			c.Type(filepath.Ext(targetPath))
+			return c.SendFile(targetPath)
+		}
+
+		// Force download with Content-Disposition header for non-preview flows.
 		filename := filepath.Base(targetPath)
 		c.Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
 
@@ -346,14 +351,28 @@ func readFileHandler() fiber.Handler {
 			return response.BadRequest(c, "cannot read a directory")
 		}
 
-		// Limit file reads to 10MB to prevent memory issues
-		if info.Size() > 10*1024*1024 {
-			return response.Error(c, fiber.StatusRequestEntityTooLarge, "file_too_large", "file exceeds 10MB limit")
-		}
-
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			return response.Error(c, fiber.StatusInternalServerError, "read_failed", err.Error())
+		const previewLimit = 2 * 1024 * 1024 // 2MB inline preview for huge files
+		truncated := false
+		var content []byte
+		if info.Size() > previewLimit {
+			f, err := os.Open(filePath)
+			if err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "read_failed", err.Error())
+			}
+			defer f.Close()
+			buf := make([]byte, previewLimit)
+			n, rerr := f.Read(buf)
+			if rerr != nil && rerr != io.EOF {
+				return response.Error(c, fiber.StatusInternalServerError, "read_failed", rerr.Error())
+			}
+			content = buf[:n]
+			truncated = true
+		} else {
+			var err error
+			content, err = os.ReadFile(filePath)
+			if err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "read_failed", err.Error())
+			}
 		}
 
 		contentType := mime.TypeByExtension(filepath.Ext(filePath))
@@ -368,6 +387,7 @@ func readFileHandler() fiber.Handler {
 				"content_type": contentType,
 				"encoding":     "base64",
 				"preview":      encoded,
+				"truncated":    truncated,
 				"message":      "binary file detected; content returned as base64",
 			})
 		}
@@ -378,6 +398,7 @@ func readFileHandler() fiber.Handler {
 			"content_type": contentType,
 			"encoding":     "utf-8",
 			"content":      string(content),
+			"truncated":    truncated,
 		})
 	}
 }
@@ -386,7 +407,7 @@ type createFileRequest struct {
 	Path     string `json:"path" validate:"required,max=2048"`
 	Filename string `json:"filename" validate:"omitempty,max=255"`
 	Title    string `json:"title" validate:"omitempty,max=255"`
-	Content  string `json:"content" validate:"omitempty,max=10000000"`
+	Content  string `json:"content" validate:"omitempty,max=50000000"`
 }
 
 // createFileHandler creates a file and parent folders if needed.
@@ -424,7 +445,7 @@ type writeFileRequest struct {
 	Path     string `json:"path" validate:"required,max=2048"`
 	Filename string `json:"filename" validate:"omitempty,max=255"`
 	Title    string `json:"title" validate:"omitempty,max=255"`
-	Content  string `json:"content" validate:"required,max=10000000"`
+	Content  string `json:"content" validate:"required,max=50000000"`
 	Encoding string `json:"encoding" validate:"omitempty,oneof=utf8 base64"`
 }
 
