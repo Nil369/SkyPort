@@ -4,16 +4,6 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource/jetbrains-mono";
 
-html,
-body {
-  width: 100%;
-  overflow-x: hidden;
-}
-
-#root {
-  min-height: 100dvh;
-  overflow-x: hidden;
-}
 
 @custom-variant dark (&:is(.dark *));
 

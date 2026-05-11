@@ -15,6 +15,7 @@ import {
   Code2,
   LogOut,
   UserCircle2,
+  Cpu,
 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -35,6 +36,7 @@ const items = [
   { to: "/code-editor", label: "Code Editor", icon: Code2 },
   { to: "/docker", label: "Docker", icon: Container },
   { to: "/terminal", label: "Terminal", icon: Terminal },
+  { to: "/process-manager", label: "Process Manager", icon: Cpu },
   { to: "/metrics", label: "Metrics", icon: Activity },
   { to: "/domains", label: "Domains", icon: Globe },
   { to: "/settings", label: "Settings", icon: Settings },

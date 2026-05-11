@@ -16,6 +16,7 @@ import { TerminalPage } from "@/features/terminal/pages/TerminalPage";
 import { FilesystemPage } from "@/features/filesystem/pages/FilesystemPage";
 import { CodeEditorPage } from "@/features/code-editor/pages/CodeEditorPage";
 import { DockerPage } from "@/features/docker/pages/DockerPage";
+import { ProcessManagerPage } from "@/features/process-manager/pages/ProcessManagerPage";
 import { MetricsPage } from "@/features/metrics/pages/MetricsPage";
 import { DomainsPage } from "@/features/domains/pages/DomainsPage";
 import { SettingsPage } from "@/features/settings/pages/SettingsPage";
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
       { path: "/files", element: <FilesystemPage /> },
       { path: "/code-editor", element: <CodeEditorPage /> },
       { path: "/docker", element: <DockerPage /> },
+      { path: "/process-manager", element: <ProcessManagerPage /> },
       { path: "/metrics", element: <MetricsPage /> },
       { path: "/domains", element: <DomainsPage /> },
       { path: "/settings", element: <SettingsPage /> },

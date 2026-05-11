@@ -34,6 +34,9 @@ type User struct {
 	PasswordHash   string         `gorm:"size:255;not null"`
 	ActiveToken    string         `gorm:"size:2048"`
 	TokenExpiresAt *time.Time
+	GitAuthType    string `gorm:"size:16"`
+	GitPAT         string `gorm:"size:4096"`
+	GitSSHKey      string `gorm:"size:4096"`
 }
 
 // Project stores project metadata and managed path.
@@ -45,6 +48,7 @@ type Project struct {
 	Name      string         `gorm:"size:120;not null"`
 	Path      string         `gorm:"size:1024;not null;uniqueIndex"`
 	GitURL    string         `gorm:"size:1024"`
+	Private   bool           `gorm:"not null;default:false" json:"private"`
 }
 
 // Deployment tracks one deployment lifecycle for a project.
@@ -59,6 +63,7 @@ type Deployment struct {
 	Runtime   string `gorm:"size:50;not null"`
 	Strategy  string `gorm:"size:50;not null"`
 	Status    string `gorm:"size:30;index;not null"`
+	Port      int    `gorm:"default:0"`
 	LogPath   string `gorm:"size:1024;not null"`
 	Error     string `gorm:"size:2048"`
 }

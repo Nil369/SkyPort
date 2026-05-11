@@ -78,6 +78,23 @@ func createProject(a *app.App, base string) fiber.Handler {
 
 		// If GitURL provided, attempt to clone the repository
 		if req.GitURL != "" {
+			if req.Private {
+				userID, err := auth.UserIDFromCtx(c)
+				if err == nil {
+					var user models.User
+					if err := a.DB.First(&user, userID).Error; err == nil {
+						if req.GitAuth == "" {
+							req.GitAuth = strings.TrimSpace(user.GitAuthType)
+						}
+						if req.GitAuth == "pat" && strings.TrimSpace(req.GitPAT) == "" {
+							req.GitPAT = user.GitPAT
+						}
+						if req.GitAuth == "ssh" && strings.TrimSpace(req.GitSSHKey) == "" {
+							req.GitSSHKey = user.GitSSHKey
+						}
+					}
+				}
+			}
 			if err := gitCloneRepoWithAuth(req.GitURL, path, req.GitAuth, req.GitSSHKey, req.GitPAT, req.GitBranch); err != nil {
 				// Clean up directory on git clone failure
 				_ = os.RemoveAll(path)
@@ -85,7 +102,7 @@ func createProject(a *app.App, base string) fiber.Handler {
 			}
 		}
 
-		project := &models.Project{Name: req.Name, Path: path, GitURL: req.GitURL}
+		project := &models.Project{Name: req.Name, Path: path, GitURL: req.GitURL, Private: req.Private}
 		if err := a.DB.Create(project).Error; err != nil {
 			return err
 		}
@@ -207,7 +224,7 @@ func deleteProject(a *app.App) fiber.Handler {
 			return err
 		}
 		_ = os.RemoveAll(project.Path)
-		if err := a.DB.Delete(&project).Error; err != nil {
+		if err := a.DB.Unscoped().Delete(&project).Error; err != nil {
 			return err
 		}
 		return response.OK(c, fiber.Map{"deleted": project.ID})

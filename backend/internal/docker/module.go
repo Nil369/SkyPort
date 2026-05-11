@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -33,6 +34,7 @@ func (m *Module) Register(a *app.App) error {
 	a.Fiber.Get("/api/v1/docker/containers", listContainersHandler())
 	a.Fiber.Get("/api/v1/docker/images", listImagesHandler())
 	a.Fiber.Delete("/api/v1/docker/image/:name", imageDeleteHandler())
+	a.Fiber.Post("/api/v1/docker/image/:name/run", imageRunHandler())
 	a.Fiber.Post("/api/v1/docker/images/prune", imagesPruneHandler())
 	a.Fiber.Get("/api/v1/docker/volumes", listVolumesHandler())
 	a.Fiber.Delete("/api/v1/docker/volume/:name", volumeDeleteHandler())
@@ -41,6 +43,7 @@ func (m *Module) Register(a *app.App) error {
 	a.Fiber.Post("/api/v1/docker/container/:name/stop", containerStopHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/restart", containerRestartHandler())
 	a.Fiber.Delete("/api/v1/docker/container/:name", containerDeleteHandler())
+	a.Fiber.Post("/api/v1/docker/container/:name/commit", containerCommitHandler())
 	return nil
 }
 
@@ -68,6 +71,15 @@ func runDocker(ctx context.Context, args ...string) ([]byte, error) {
 		return nil, errors.New(msg)
 	}
 	return out, nil
+}
+
+func runDockerWithContext(ctx context.Context, contextName string, args ...string) ([]byte, error) {
+	name := strings.TrimSpace(contextName)
+	if name == "" {
+		return runDocker(ctx, args...)
+	}
+	ctxArgs := append([]string{"--context", name}, args...)
+	return runDocker(ctx, ctxArgs...)
 }
 
 func resolveDockerBinary() string {
@@ -148,8 +160,14 @@ func dockerStatusHandler() fiber.Handler {
 // @Produce json
 // @Success 200 {object} map[string]any
 // @Router /api/v1/docker/install [post]
+type dockerInstallRequest struct {
+	Execute bool `json:"execute"`
+}
+
 func dockerInstallHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		var req dockerInstallRequest
+		_ = c.BodyParser(&req)
 		osName := runtime.GOOS
 		command := ""
 		notes := ""
@@ -166,10 +184,39 @@ func dockerInstallHandler() fiber.Handler {
 		default:
 			notes = "Unsupported OS for automated Docker install command."
 		}
+
+		if !req.Execute {
+			return response.OK(c, fiber.Map{
+				"os":       osName,
+				"install":  command,
+				"notes":    notes,
+				"executed": false,
+			})
+		}
+
+		if command == "" {
+			return response.Error(c, fiber.StatusBadRequest, "unsupported_os", "no install command available for this OS")
+		}
+
+		ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Minute)
+		defer cancel()
+
+		var run *exec.Cmd
+		if osName == "windows" {
+			run = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", command)
+		} else {
+			run = exec.CommandContext(ctx, "sh", "-c", command)
+		}
+		out, err := run.CombinedOutput()
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "docker_install_failed", strings.TrimSpace(string(out)))
+		}
 		return response.OK(c, fiber.Map{
-			"os":      osName,
-			"install": command,
-			"notes":   notes,
+			"os":       osName,
+			"install":  command,
+			"notes":    notes,
+			"executed": true,
+			"output":   strings.TrimSpace(string(out)),
 		})
 	}
 }
@@ -337,6 +384,11 @@ type containerInfo struct {
 	Created string `json:"created"`
 }
 
+type commitRequest struct {
+	Repository string `json:"repository" validate:"required,max=255"`
+	Tag        string `json:"tag" validate:"omitempty,max=128"`
+}
+
 // listContainersHandler lists all Docker containers.
 // @Summary List containers
 // @Tags Docker
@@ -354,31 +406,47 @@ func listContainersHandler() fiber.Handler {
 			return response.Error(c, fiber.StatusServiceUnavailable, "list_failed", err.Error())
 		}
 
-		containers := make([]containerInfo, 0)
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+		containers := parseDockerContainers(output)
 
-		for _, line := range lines {
-			if line == "" {
-				continue
+		if len(containers) == 0 && runtime.GOOS == "windows" {
+			for _, ctxName := range []string{"desktop-linux", "default"} {
+				fallbackOut, fbErr := runDockerWithContext(ctx, ctxName, "ps", "-a", "--format", "{{json .}}")
+				if fbErr != nil {
+					continue
+				}
+				containers = parseDockerContainers(fallbackOut)
+				if len(containers) > 0 {
+					break
+				}
 			}
-			var data map[string]string
-			if err := json.Unmarshal([]byte(line), &data); err != nil {
-				continue
-			}
-
-			containers = append(containers, containerInfo{
-				ID:      data["ID"],
-				Names:   data["Names"],
-				Image:   data["Image"],
-				Status:  data["Status"],
-				Ports:   data["Ports"],
-				State:   data["State"],
-				Created: data["CreatedAt"],
-			})
 		}
 
 		return response.OK(c, fiber.Map{"containers": containers})
 	}
+}
+
+func parseDockerContainers(output []byte) []containerInfo {
+	containers := make([]containerInfo, 0)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var data map[string]string
+		if err := json.Unmarshal([]byte(line), &data); err != nil {
+			continue
+		}
+		containers = append(containers, containerInfo{
+			ID:      data["ID"],
+			Names:   data["Names"],
+			Image:   data["Image"],
+			Status:  data["Status"],
+			Ports:   data["Ports"],
+			State:   data["State"],
+			Created: data["CreatedAt"],
+		})
+	}
+	return containers
 }
 
 // containerStartHandler starts a Docker container.
@@ -485,12 +553,55 @@ func containerDeleteHandler() fiber.Handler {
 	}
 }
 
+// containerCommitHandler creates a new image from a container.
+// @Summary Commit container
+// @Tags Docker
+// @Description Create a Docker image from a container by name or ID
+// @Accept json
+// @Produce json
+// @Param name path string true "Container name or ID"
+// @Param request body commitRequest true "Commit request"
+// @Success 200 {object} map[string]any
+// @Router /api/v1/docker/container/{name}/commit [post]
+func containerCommitHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		name := c.Params("name")
+		var req commitRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+		repo := strings.TrimSpace(req.Repository)
+		tag := strings.TrimSpace(req.Tag)
+		if tag == "" {
+			tag = "latest"
+		}
+		imageRef := repo + ":" + tag
+
+		ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
+		defer cancel()
+
+		if _, err := runDocker(ctx, "commit", name, imageRef); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "no such container") {
+				return response.Error(c, fiber.StatusNotFound, "container_not_found", err.Error())
+			}
+			return response.Error(c, fiber.StatusInternalServerError, "commit_failed", err.Error())
+		}
+
+		return response.OK(c, fiber.Map{"status": "image created", "image": imageRef})
+	}
+}
+
 type imageInfo struct {
 	ID      string `json:"id"`
 	Repo    string `json:"repository"`
 	Tag     string `json:"tag"`
 	Size    string `json:"size"`
 	Created string `json:"created"`
+}
+
+type imageRunRequest struct {
+	Name string `json:"name" validate:"omitempty,max=128"`
+	Port int    `json:"port" validate:"omitempty,min=1,max=65535"`
 }
 
 // listImagesHandler lists docker images.
@@ -542,6 +653,46 @@ func imageDeleteHandler() fiber.Handler {
 			return response.Error(c, fiber.StatusInternalServerError, "image_delete_failed", err.Error())
 		}
 		return response.OK(c, fiber.Map{"status": "image deleted", "image": name})
+	}
+}
+
+// imageRunHandler creates a container from an image.
+// @Summary Run image
+// @Tags Docker
+// @Description Run a Docker image to create a container
+// @Accept json
+// @Produce json
+// @Param name path string true "Image name or ID"
+// @Param request body imageRunRequest false "Run request"
+// @Success 200 {object} map[string]any
+// @Router /api/v1/docker/image/{name}/run [post]
+func imageRunHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		image := c.Params("name")
+		var req imageRunRequest
+		_ = c.BodyParser(&req)
+		if req.Port != 0 {
+			if err := validator.ParseAndValidate(c, &req); err != nil {
+				return err
+			}
+		}
+
+		args := []string{"run", "-d"}
+		if strings.TrimSpace(req.Name) != "" {
+			args = append(args, "--name", strings.TrimSpace(req.Name))
+		}
+		if req.Port > 0 {
+			args = append(args, "-p", fmt.Sprintf("%d:%d", req.Port, req.Port))
+		}
+		args = append(args, image)
+
+		ctx, cancel := context.WithTimeout(c.UserContext(), 15*time.Second)
+		defer cancel()
+		out, err := runDocker(ctx, args...)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "image_run_failed", err.Error())
+		}
+		return response.OK(c, fiber.Map{"status": "container created", "container_id": strings.TrimSpace(string(out))})
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/shirou/gopsutil/v3/mem"
 
 	"skyport/internal/app"
+	"skyport/internal/config"
 	"skyport/internal/response"
 )
 
@@ -20,7 +21,7 @@ type Module struct{}
 func (m *Module) Name() string { return "system" }
 
 func (m *Module) Register(a *app.App) error {
-	a.Fiber.Get("/api/v1/system/info", systemInfoHandler())
+	a.Fiber.Get("/api/v1/system/info", systemInfoHandler(a.Config))
 	a.Fiber.Get("/api/v1/system/git/status", gitStatusHandler())
 	a.Fiber.Post("/api/v1/system/git/install", gitInstallHandler())
 	return nil
@@ -33,7 +34,7 @@ func (m *Module) Register(a *app.App) error {
 // @Produce json
 // @Success 200 {object} map[string]any
 // @Router /api/v1/system/info [get]
-func systemInfoHandler() fiber.Handler {
+func systemInfoHandler(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		h, _ := host.Info()
 		vm, _ := mem.VirtualMemory()
@@ -44,6 +45,7 @@ func systemInfoHandler() fiber.Handler {
 			"uptime":       h.Uptime,
 			"go_version":   runtime.Version(),
 			"cpu_cores":    runtime.NumCPU(),
+			"db_path":      cfg.DBPath,
 			"memory": fiber.Map{
 				"total_bytes": vm.Total,
 				"used_bytes":  vm.Used,

@@ -75,19 +75,21 @@ func (m *Module) LogsWebSocket() func(*gws.Conn) {
 }
 
 type CreateDeploymentRequest struct {
-	ProjectID         uint   `json:"project_id" validate:"required"`
-	AutoStart         bool   `json:"auto_start"`
-	Port              int    `json:"port" validate:"omitempty,min=1,max=65535"`
-	WorkingDirectory  string `json:"working_directory" validate:"omitempty,max=512"`
-	StartCmd          string `json:"start_cmd" validate:"omitempty,max=1024"`
-	InstallCmd        string `json:"install_cmd" validate:"omitempty,max=1024"`
-	BuildCmd          string `json:"build_cmd" validate:"omitempty,max=1024"`
-	ContainerRegistry string `json:"container_registry" validate:"omitempty,max=255"`
-	ContainerImage    string `json:"container_image" validate:"omitempty,max=255"`
-	ContainerTag      string `json:"container_tag" validate:"omitempty,max=128"`
-	ContainerPush     bool   `json:"container_push"`
-	ContainerUsername string `json:"container_username" validate:"omitempty,max=255"`
-	ContainerPassword string `json:"container_password" validate:"omitempty,max=255"`
+	ProjectID         uint              `json:"project_id" validate:"required"`
+	Strategy          string            `json:"strategy" validate:"omitempty,oneof=docker pm2 native"`
+	AutoStart         bool              `json:"auto_start"`
+	Port              int               `json:"port" validate:"omitempty,min=1,max=65535"`
+	Env               map[string]string `json:"env"`
+	WorkingDirectory  string            `json:"working_directory" validate:"omitempty,max=512"`
+	StartCmd          string            `json:"start_cmd" validate:"omitempty,max=1024"`
+	InstallCmd        string            `json:"install_cmd" validate:"omitempty,max=1024"`
+	BuildCmd          string            `json:"build_cmd" validate:"omitempty,max=1024"`
+	ContainerRegistry string            `json:"container_registry" validate:"omitempty,max=255"`
+	ContainerImage    string            `json:"container_image" validate:"omitempty,max=255"`
+	ContainerTag      string            `json:"container_tag" validate:"omitempty,max=128"`
+	ContainerPush     bool              `json:"container_push"`
+	ContainerUsername string            `json:"container_username" validate:"omitempty,max=255"`
+	ContainerPassword string            `json:"container_password" validate:"omitempty,max=255"`
 }
 
 // @Summary Create deployment
@@ -124,10 +126,29 @@ func createDeployment(a *app.App, m *Module, deployBase, logBase string) fiber.H
 			Runtime:   string(rt),
 			Strategy:  strategy,
 			Status:    "pending",
+			Port:      req.Port,
 			LogPath:   filepath.Join(logBase, fmt.Sprintf("deployment-%d.log", time.Now().UnixNano())),
 		}
 		if err := a.DB.Create(&d).Error; err != nil {
 			return err
+		}
+		if len(req.Env) > 0 {
+			envs := make([]models.EnvironmentVariable, 0, len(req.Env))
+			for key, value := range req.Env {
+				k := strings.TrimSpace(key)
+				if k == "" {
+					continue
+				}
+				envs = append(envs, models.EnvironmentVariable{
+					DeploymentID: d.ID,
+					Key:          k,
+					Value:        value,
+					Masked:       false,
+				})
+			}
+			if len(envs) > 0 {
+				_ = a.DB.Create(&envs).Error
+			}
 		}
 		if req.AutoStart {
 			go m.runDeployment(context.Background(), a, &d, req, deployBase)
@@ -162,8 +183,21 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 	}
 	d.Runtime = string(detect.Runtime)
 	cap := capabilities.Detect(ctx)
-	d.Strategy = cap.Recommendation
+	if strings.TrimSpace(req.Strategy) != "" {
+		d.Strategy = strings.ToLower(strings.TrimSpace(req.Strategy))
+	} else {
+		d.Strategy = cap.Recommendation
+	}
 	_ = a.DB.Model(d).Updates(map[string]any{"runtime": d.Runtime, "strategy": d.Strategy}).Error
+
+	projectName := fmt.Sprintf("project-%d", d.ProjectID)
+	var project models.Project
+	if err := a.DB.First(&project, d.ProjectID).Error; err == nil {
+		if strings.TrimSpace(project.Name) != "" {
+			projectName = project.Name
+		}
+	}
+	appName := fmt.Sprintf("skyport_%d_%s", d.ProjectID, normalizeAppName(projectName))
 
 	workRoot, usedFallbackFrom := resolveDeploymentWorkDir(d.Path, req.WorkingDirectory, detect.WorkingDirectory)
 	msg := fmt.Sprintf("working directory: %s", workRoot)
@@ -213,6 +247,10 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 		startCmd = detect.StartCommand
 	}
 	if startCmd == "" {
+		if strings.ToLower(d.Strategy) == "pm2" {
+			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": "start_cmd required for pm2 deployments"}).Error
+			return
+		}
 		startCmd = "echo no start command found"
 	}
 
@@ -220,7 +258,7 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 	parts := strings.Fields(startCmd)
 	switch strings.ToLower(d.Strategy) {
 	case "docker":
-		imageName := fmt.Sprintf("skyport-deploy-%d", d.ID)
+		imageName := appName
 		imageTag := strings.TrimSpace(req.ContainerTag)
 		if imageTag == "" {
 			imageTag = "latest"
@@ -265,7 +303,8 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 			}
 		}
 		// Run container with restart policy
-		containerName := fmt.Sprintf("deployment-%d", d.ID)
+		containerName := appName
+		_ = exec.CommandContext(ctx, "docker", "rm", "-f", containerName).Run()
 		runParts := []string{"docker", "run", "-d", "--name", containerName, "--restart", "unless-stopped"}
 		if req.Port > 0 {
 			runParts = append(runParts, "-p", fmt.Sprintf("%d:%d", req.Port, req.Port))
@@ -312,7 +351,7 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 		log("running", fmt.Sprintf("container started id=%s", containerID))
 		return
 	case "pm2":
-		name := fmt.Sprintf("deployment-%d", d.ID)
+		name := appName
 		ecosystemPath, ecoErr := writePm2Ecosystem(filepath.Join(deployBase, fmt.Sprintf("%d", d.ID)), name, workRoot, parts, env)
 		if ecoErr != nil {
 			_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": ecoErr.Error()}).Error
@@ -366,7 +405,7 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 	default:
 		pid, err := m.pm.Start(ctx, process.StartRequest{
 			Manager: d.Strategy,
-			Name:    fmt.Sprintf("deployment-%d", d.ID),
+			Name:    appName,
 			Command: parts[0],
 			Args:    parts[1:],
 			Dir:     workRoot,
@@ -387,6 +426,31 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 		log("running", fmt.Sprintf("process started pid=%d", pid))
 		return
 	}
+}
+
+func normalizeAppName(input string) string {
+	name := strings.ToLower(strings.TrimSpace(input))
+	if name == "" {
+		return "app"
+	}
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			b.WriteRune('_')
+			lastUnderscore = true
+		}
+	}
+	out := strings.Trim(b.String(), "_")
+	if out == "" {
+		return "app"
+	}
+	return out
 }
 
 // resolveDeploymentWorkDir chooses: user's working_directory → detected subdirectory → cloned repo root.

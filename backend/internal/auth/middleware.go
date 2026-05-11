@@ -47,3 +47,7 @@ func userIDFromCtx(c *fiber.Ctx) (uint, error) {
 	}
 	return id, nil
 }
+
+func UserIDFromCtx(c *fiber.Ctx) (uint, error) {
+	return userIDFromCtx(c)
+}

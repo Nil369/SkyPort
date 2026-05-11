@@ -2,10 +2,12 @@ package auth
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 
+	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/validator"
 )
@@ -110,5 +112,85 @@ func meHandler(svc *Service) fiber.Handler {
 			return err
 		}
 		return response.OK(c, out)
+	}
+}
+
+// credentialsHandler returns stored git credentials metadata for the user.
+// @Summary Git credentials
+// @Tags Auth
+// @Description Returns stored git credentials metadata
+// @Produce json
+// @Success 200 {object} CredentialsDTO
+// @Failure 401 {object} response.ErrorBody
+// @Security BearerAuth
+// @Router /api/v1/auth/credentials [get]
+func credentialsHandler(svc *Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID, err := userIDFromCtx(c)
+		if err != nil {
+			return response.Unauthorized(c, "unauthorized")
+		}
+		var user models.User
+		if err := svc.db.First(&user, userID).Error; err != nil {
+			return err
+		}
+		return response.OK(c, CredentialsDTO{
+			GitAuthType: strings.TrimSpace(user.GitAuthType),
+			HasPAT:      strings.TrimSpace(user.GitPAT) != "",
+			HasSSHKey:   strings.TrimSpace(user.GitSSHKey) != "",
+		})
+	}
+}
+
+// updateCredentialsHandler stores git credentials for the user.
+// @Summary Update git credentials
+// @Tags Auth
+// @Description Stores git credentials for reuse on private repos
+// @Accept json
+// @Produce json
+// @Param request body UpdateCredentialsRequest true "Credentials payload"
+// @Success 200 {object} CredentialsDTO
+// @Failure 401 {object} response.ErrorBody
+// @Security BearerAuth
+// @Router /api/v1/auth/credentials [post]
+func updateCredentialsHandler(svc *Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		userID, err := userIDFromCtx(c)
+		if err != nil {
+			return response.Unauthorized(c, "unauthorized")
+		}
+		var req UpdateCredentialsRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+		updates := map[string]any{}
+		if strings.TrimSpace(req.GitAuthType) != "" {
+			updates["git_auth_type"] = strings.TrimSpace(req.GitAuthType)
+		}
+		if req.ClearPAT {
+			updates["git_pat"] = ""
+		} else if strings.TrimSpace(req.GitPAT) != "" {
+			updates["git_pat"] = strings.TrimSpace(req.GitPAT)
+		}
+		if req.ClearSSHKey {
+			updates["git_ssh_key"] = ""
+		} else if strings.TrimSpace(req.GitSSHKey) != "" {
+			updates["git_ssh_key"] = req.GitSSHKey
+		}
+		if len(updates) == 0 {
+			return response.OK(c, CredentialsDTO{})
+		}
+		if err := svc.db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
+			return err
+		}
+		var user models.User
+		if err := svc.db.First(&user, userID).Error; err != nil {
+			return err
+		}
+		return response.OK(c, CredentialsDTO{
+			GitAuthType: strings.TrimSpace(user.GitAuthType),
+			HasPAT:      strings.TrimSpace(user.GitPAT) != "",
+			HasSSHKey:   strings.TrimSpace(user.GitSSHKey) != "",
+		})
 	}
 }

@@ -1,4 +1,6 @@
 import { PlugZap, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,36 @@ export function TopBar({ className }: { className?: string }) {
   const connected = metricsWs === "connected" || terminalWs === "connected";
   const ws = connected ? "connected" : metricsWs;
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const initialSearch = params.get("q") ?? "";
+  const [searchValue, setSearchValue] = useState(initialSearch);
+
+  useEffect(() => {
+    setSearchValue(initialSearch);
+  }, [initialSearch]);
+
+  useEffect(() => {
+    if (searchValue.trim() === initialSearch.trim()) {
+      return;
+    }
+    const handle = window.setTimeout(() => {
+      updateSearch(searchValue);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [searchValue, initialSearch]);
+
+  const updateSearch = (value: string) => {
+    const next = new URLSearchParams(location.search);
+    if (value.trim()) {
+      next.set("q", value.trim());
+    } else {
+      next.delete("q");
+    }
+    navigate({ pathname: location.pathname, search: next.toString() }, { replace: true });
+  };
+
   return (
     <header
       className={cn(
@@ -55,7 +87,15 @@ export function TopBar({ className }: { className?: string }) {
           <div className="flex items-center gap-2">
             <Search className="size-4 text-muted-foreground" />
             <Input
-              placeholder="Search anything… (Command palette coming soon)"
+              placeholder="Search projects and deployments…"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  updateSearch(searchValue);
+                }
+              }}
               className="h-7 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
             />
           </div>

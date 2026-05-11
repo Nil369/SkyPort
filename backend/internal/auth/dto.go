@@ -17,6 +17,20 @@ type UserDTO struct {
 	Email string `json:"email"`
 }
 
+type CredentialsDTO struct {
+	GitAuthType string `json:"git_auth_type"`
+	HasPAT      bool   `json:"has_pat"`
+	HasSSHKey   bool   `json:"has_ssh_key"`
+}
+
+type UpdateCredentialsRequest struct {
+	GitAuthType string `json:"git_auth_type" validate:"omitempty,oneof=ssh pat"`
+	GitPAT      string `json:"git_pat" validate:"omitempty,max=4096"`
+	GitSSHKey   string `json:"git_ssh_key" validate:"omitempty,max=4096"`
+	ClearPAT    bool   `json:"clear_pat"`
+	ClearSSHKey bool   `json:"clear_ssh_key"`
+}
+
 type AuthResponse struct {
 	User         UserDTO `json:"user"`
 	AccessToken  string  `json:"access_token"`
