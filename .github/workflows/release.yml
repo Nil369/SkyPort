@@ -29,7 +29,11 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Install frontend and build UI
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
         run: make frontend-build FRONTEND_USE_CI=1
 
       - name: Regenerate Swagger
@@ -44,19 +48,19 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          cp backend/bin/linux-amd64/skyport backend/bin/skyport-linux-amd64
-          cp backend/bin/linux-arm64/skyport backend/bin/skyport-linux-arm64
-          cp backend/bin/darwin-amd64/skyport backend/bin/skyport-darwin-amd64
-          cp backend/bin/darwin-arm64/skyport backend/bin/skyport-darwin-arm64
-          cp backend/bin/windows-amd64/skyport.exe backend/bin/skyport-windows-amd64.exe
+          cp bin/linux-amd64/skyport bin/skyport-linux-amd64
+          cp bin/linux-arm64/skyport bin/skyport-linux-arm64
+          cp bin/darwin-amd64/skyport bin/skyport-darwin-amd64
+          cp bin/darwin-arm64/skyport bin/skyport-darwin-arm64
+          cp bin/windows-amd64/skyport.exe bin/skyport-windows-amd64.exe
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            backend/bin/skyport-linux-amd64
-            backend/bin/skyport-linux-arm64
-            backend/bin/skyport-darwin-amd64
-            backend/bin/skyport-darwin-arm64
-            backend/bin/skyport-windows-amd64.exe
+            bin/skyport-linux-amd64
+            bin/skyport-linux-arm64
+            bin/skyport-darwin-amd64
+            bin/skyport-darwin-arm64
+            bin/skyport-windows-amd64.exe
