@@ -1,4 +1,3 @@
-import * as React from "react";
 import { isRouteErrorResponse, useRouteError, Link } from "react-router";
 
 import { Card } from "@/components/ui/card";

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { File, Folder, FolderOpen, ChevronRight, ArrowLeft } from "lucide-react";
+import { File, Folder, FolderOpen, ChevronRight, ArrowLeft, Upload, Download, ExternalLink } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -11,8 +12,10 @@ import { ResizablePanels } from "@/components/layout/ResizablePanels";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
+import { useAuthStore } from "@/stores/authStore";
 
 export function CodeEditorPage() {
+  const token = useAuthStore((s) => s.accessToken);
   const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects });
   const [projectPath, setProjectPath] = React.useState("");
   const [selectedPath, setSelectedPath] = React.useState("");
@@ -20,6 +23,8 @@ export function CodeEditorPage() {
   const [currentPath, setCurrentPath] = React.useState("");
   const [customPath, setCustomPath] = React.useState("");
   const [previewUrl, setPreviewUrl] = React.useState("");
+  const [savedCode, setSavedCode] = React.useState("");
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const listing = useQuery({
     queryKey: ["code-editor-files", currentPath],
@@ -29,12 +34,50 @@ export function CodeEditorPage() {
 
   const readFile = useMutation({
     mutationFn: platformApi.readFile,
-    onSuccess: (res) => setCode(res.content ?? ""),
+    onSuccess: (res) => {
+      const next = res.content ?? "";
+      setCode(next);
+      setSavedCode(next);
+    },
   });
 
   const saveFile = useMutation({
     mutationFn: ({ path, content }: { path: string; content: string }) => platformApi.writeFile(path, content),
+    onSuccess: (_res, vars) => {
+      setSavedCode(vars.content);
+      toast.success("File saved");
+    },
+    onError: () => toast.error("Save failed"),
   });
+
+  const uploadFiles = useMutation({
+    mutationFn: async ({ path, files }: { path: string; files: File[] }) => {
+      for (const file of files) {
+        await platformApi.uploadFile(path, file);
+      }
+      return files.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} file${count === 1 ? "" : "s"} uploaded`);
+      listing.refetch();
+    },
+    onError: () => toast.error("Upload failed"),
+  });
+
+  const selectedLanguage = React.useMemo(() => detectLanguage(selectedPath), [selectedPath]);
+  const isDirty = !!selectedPath && !previewUrl && code !== savedCode;
+
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!selectedPath || !!previewUrl || saveFile.isPending || !isDirty) return;
+        saveFile.mutate({ path: selectedPath, content: code });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [code, isDirty, previewUrl, saveFile, selectedPath]);
 
   return (
     <PageShell className="max-w-350">
@@ -55,6 +98,7 @@ export function CodeEditorPage() {
               setSelectedPath("");
               setPreviewUrl("");
               setCode("");
+              setSavedCode("");
             }}
           >
             <option value="">Choose project path</option>
@@ -79,6 +123,7 @@ export function CodeEditorPage() {
               setSelectedPath("");
               setPreviewUrl("");
               setCode("");
+              setSavedCode("");
             }}
           >
             Open custom path
@@ -86,11 +131,31 @@ export function CodeEditorPage() {
           <Button variant="outline" onClick={() => listing.refetch()} disabled={!currentPath}>
             Refresh
           </Button>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []);
+              if (!files.length || !currentPath) return;
+              uploadFiles.mutate({ path: currentPath, files });
+              e.currentTarget.value = "";
+            }}
+          />
+          <Button variant="outline" onClick={() => uploadInputRef.current?.click()} disabled={!currentPath || uploadFiles.isPending}>
+            <Upload className="size-4" />
+            Upload
+          </Button>
+          <Button variant="outline" onClick={() => selectedPath && handleDownload(selectedPath, token)} disabled={!selectedPath}>
+            <Download className="size-4" />
+            Download
+          </Button>
           <Button
             onClick={() => selectedPath && saveFile.mutate({ path: selectedPath, content: code })}
-            disabled={!selectedPath || !!previewUrl}
+            disabled={!selectedPath || !!previewUrl || !isDirty}
           >
-            Save file
+            Save file (Ctrl/Cmd+S)
           </Button>
         </CardContent>
       </Card>
@@ -131,8 +196,9 @@ export function CodeEditorPage() {
                         }
                         setSelectedPath(item.path);
                         if (isPreviewable(item.path)) {
-                          setPreviewUrl(previewUrl(item.path));
+                          setPreviewUrl(buildPreviewUrl(item.path, token));
                           setCode("");
+                          setSavedCode("");
                           return;
                         }
                         setPreviewUrl("");
@@ -157,30 +223,63 @@ export function CodeEditorPage() {
                 <div className="h-full">
                   <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
                     <span className="truncate">{selectedPath || "No file selected"}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedPath("");
-                        setPreviewUrl("");
-                        setCode("");
-                      }}
-                    >
-                      <ArrowLeft className="size-4" />
-                      Back
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {selectedPath ? (
+                        <Button size="sm" variant="outline" onClick={() => handleDownload(selectedPath, token)}>
+                          <Download className="size-4" />
+                          Download
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedPath("");
+                          setPreviewUrl("");
+                          setCode("");
+                          setSavedCode("");
+                        }}
+                      >
+                        <ArrowLeft className="size-4" />
+                        Back
+                      </Button>
+                    </div>
                   </div>
                   <div className="h-[calc(68vh-37px)]">
                     {previewUrl ? (
                       selectedPath.toLowerCase().endsWith(".pdf") ? (
-                        <iframe title="preview" src={previewUrl} className="h-full w-full" />
+                        <object data={previewUrl} type="application/pdf" className="h-full w-full">
+                          <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                            <span>PDF preview unavailable in this browser.</span>
+                            <div className="flex items-center gap-2">
+                              <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}>
+                                <ExternalLink className="size-4" />
+                                Open in new tab
+                              </Button>
+                              <Button size="sm" onClick={() => selectedPath && handleDownload(selectedPath, token)} disabled={!selectedPath}>
+                                <Download className="size-4" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        </object>
                       ) : (
                         <div className="flex h-full items-center justify-center overflow-auto bg-muted/20">
                           <img src={previewUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
                         </div>
                       )
                     ) : (
-                      <CodeEditor value={code} onChange={setCode} language={detectLanguage(selectedPath)} />
+                      <div className="h-full">
+                        <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+                          <span className="truncate">{selectedPath ? `Editing ${selectedPath}` : "Select a file to start editing"}</span>
+                          <span>
+                            {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
+                          </span>
+                        </div>
+                        <div className="h-[calc(100%-29px)]">
+                          <CodeEditor value={code} onChange={setCode} language={selectedLanguage} />
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -205,8 +304,22 @@ function isPreviewable(path: string) {
     p.endsWith(".pdf")
   );
 }
-function previewUrl(path: string) {
-  return `${env.apiBaseUrl}/files/download?path=${encodeURIComponent(path)}&inline=1`;
+function buildPreviewUrl(path: string, token?: string | null) {
+  const url = new URL(`${env.apiBaseUrl}/files/download`);
+  url.searchParams.set("path", path);
+  url.searchParams.set("inline", "1");
+  if (token) url.searchParams.set("token", token);
+  return url.toString();
+}
+function handleDownload(path: string, token?: string | null) {
+  const url = new URL(`${env.apiBaseUrl}/files/download`);
+  url.searchParams.set("path", path);
+  if (token) url.searchParams.set("token", token);
+  const a = document.createElement("a");
+  a.href = url.toString();
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.click();
 }
 function detectLanguage(path: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";

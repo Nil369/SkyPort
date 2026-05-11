@@ -2,8 +2,10 @@ import * as React from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import "xterm/css/xterm.css";
+import { Eraser } from "lucide-react";
 
 import { useTheme } from "@/components/theme-provider";
+import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/authStore";
 import { useWebSocket } from "@/services/ws/useWebSocket";
 
@@ -95,7 +97,18 @@ export function TerminalEmulator() {
 
   return (
     <div className="relative h-full w-full bg-background">
-      <div className="absolute right-3 top-2 text-[11px] text-muted-foreground">WS: {status}</div>
+      <div className="absolute right-3 top-2 z-10 flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-6 px-2 text-[11px]"
+          onClick={() => termRef.current?.clear()}
+        >
+          <Eraser className="size-3.5" />
+          Clear
+        </Button>
+        <div className="text-[11px] text-muted-foreground">WS: {status}</div>
+      </div>
       <div ref={containerRef} className="h-full w-full" onClick={() => termRef.current?.focus()} />
     </div>
   );

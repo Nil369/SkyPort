@@ -1,7 +1,6 @@
 package terminal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -94,31 +93,18 @@ type controlMessage struct {
 	Rows uint16 `json:"rows"`
 }
 
-var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
+var oscPattern = regexp.MustCompile(`\x1b\][^\x07\x1b]*(\x07|\x1b\\)`)
 
 func sanitizeTerminalOutput(in []byte) []byte {
-	s := string(in)
-	s = ansiPattern.ReplaceAllString(s, "")
-	// Remove OSC and stray ESC bytes often emitted by prompt themes.
-	s = strings.ReplaceAll(s, "\x1b]0;", "")
-	s = strings.ReplaceAll(s, "\x1b", "")
-	return []byte(s)
+	// Keep ANSI colors/styles so prompts render with highlighting.
+	// Only strip OSC title sequences, which can clutter browser terminals.
+	return []byte(oscPattern.ReplaceAllString(string(in), ""))
 }
 
 func runPTYSession(conn *gws.Conn, client *wsinfra.Client) {
-	shell := "/bin/bash"
-	args := []string{"-l"}
-	if runtime.GOOS == "windows" {
-		// Use cmd by default for web clients to avoid complex prompt themes/escape codes.
-		shell = "cmd.exe"
-		args = []string{"/Q", "/K", "prompt $P$G"}
-		if _, err := exec.LookPath(shell); err != nil {
-			shell = "powershell.exe"
-			args = []string{"-NoLogo", "-NoProfile"}
-		}
-	}
+	shell, args, env := terminalProcessConfig()
 	cmd := exec.Command(shell, args...)
-	cmd.Env = os.Environ()
+	cmd.Env = env
 
 	var writeMu sync.Mutex
 	write := func(mt int, payload []byte) error {
@@ -262,6 +248,39 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 		}
 	}()
 
+	lineBuf := make([]byte, 0, 256)
+	handleInput := func(data []byte) error {
+		for _, b := range data {
+			switch b {
+			case 0x7f, 0x08: // DEL / BS
+				if len(lineBuf) > 0 {
+					lineBuf = lineBuf[:len(lineBuf)-1]
+					select {
+					case client.Send <- []byte("\b \b"):
+					default:
+					}
+				}
+			case '\r', '\n':
+				payload := append(append([]byte{}, lineBuf...), '\n')
+				if _, err := stdin.Write(payload); err != nil {
+					return err
+				}
+				lineBuf = lineBuf[:0]
+				select {
+				case client.Send <- []byte("\r\n"):
+				default:
+				}
+			default:
+				lineBuf = append(lineBuf, b)
+				select {
+				case client.Send <- []byte{b}:
+				default:
+				}
+			}
+		}
+		return nil
+	}
+
 	for {
 		select {
 		case <-done:
@@ -276,7 +295,7 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 				continue
 			}
 			input := normalizeInput(data)
-			if _, err := stdin.Write(input); err != nil {
+			if err := handleInput(input); err != nil {
 				return true
 			}
 		}
@@ -284,10 +303,51 @@ func runPipeShellSession(conn *gws.Conn, client *wsinfra.Client, shell string, a
 }
 
 func normalizeInput(data []byte) []byte {
-	// Postman sends one WS frame per Send click. If no newline is present,
-	// append one so typical commands execute immediately.
-	if len(data) > 0 && !bytes.Contains(data, []byte("\n")) && !bytes.Contains(data, []byte("\r")) {
-		return append(append([]byte{}, data...), '\n')
+	// Keep terminal input raw for interactive clients (xterm.js sends per-keystroke data).
+	// Map DEL -> BS on Windows so backspace consistently edits the current line.
+	// xterm sends 0x7f; Windows shells typically expect 0x08.
+	if runtime.GOOS == "windows" {
+		out := make([]byte, len(data))
+		copy(out, data)
+		for i := range out {
+			if out[i] == 0x7f {
+				out[i] = 0x08
+			}
+		}
+		return out
 	}
 	return data
+}
+
+func terminalProcessConfig() (string, []string, []string) {
+	env := os.Environ()
+	if runtime.GOOS == "windows" {
+		ps := "powershell.exe"
+		if _, err := exec.LookPath(ps); err == nil {
+			// Blue + bold PowerShell prompt: `PS <cwd> >`
+			command := `function global:prompt { "$([char]27)[1;34mPS $($executionContext.SessionState.Path.CurrentLocation)>$([char]27)[0m " }`
+			return ps, []string{"-NoLogo", "-NoProfile", "-NoExit", "-Command", command}, env
+		}
+		return "cmd.exe", []string{"/Q", "/K", "prompt $P$G"}, env
+	}
+
+	shell := strings.TrimSpace(os.Getenv("SHELL"))
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	if _, err := exec.LookPath(shell); err != nil {
+		if _, zshErr := exec.LookPath("/bin/zsh"); zshErr == nil {
+			shell = "/bin/zsh"
+		} else {
+			shell = "/bin/sh"
+		}
+	}
+
+	// Blue + bold prompt for bash/zsh-compatible shells.
+	env = append(
+		env,
+		`PS1=\[\e[1;34m\]\u@\h:\w\$ \[\e[0m\] `,
+		`PROMPT=%F{blue}%B%n@%m:%~%#%b%f `,
+	)
+	return shell, []string{"-l"}, env
 }

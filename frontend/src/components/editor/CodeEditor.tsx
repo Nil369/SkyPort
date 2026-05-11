@@ -51,7 +51,7 @@ export function CodeEditor({
         value={value}
         height={height}
         theme={effectiveTheme === "dark" ? githubDark : githubLight}
-        className="h-full"
+        className="h-full text-[13px]"
         basicSetup={{
           lineNumbers: true,
           highlightActiveLine: true,
@@ -61,7 +61,10 @@ export function CodeEditor({
           autocompletion: true,
           closeBrackets: true,
           indentOnInput: true,
+          highlightSelectionMatches: true,
+          closeBracketsKeymap: true,
         }}
+        indentWithTab
         extensions={extensions}
         onChange={(val) => onChange(val)}
       />

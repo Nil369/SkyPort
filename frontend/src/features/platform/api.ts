@@ -58,6 +58,12 @@ export const platformApi = {
   writeFile: async (path: string, content: string) => (await http.put("/files/write", { path, content })).data,
   createFile: async (path: string, filename: string) => (await http.post("/files/file", { path, filename, content: "" })).data,
   createFolder: async (path: string) => (await http.post("/files/folder", { path })).data,
+  uploadFile: async (path: string, file: File) => {
+    const form = new FormData();
+    form.append("path", path);
+    form.append("file", file);
+    return (await http.post("/files/upload", form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+  },
   downloadFileBlob: async (path: string) =>
     (
       await http.get<Blob>("/files/download", {

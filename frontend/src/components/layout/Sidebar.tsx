@@ -31,10 +31,10 @@ const items = [
   { to: "/overview", label: "Overview", icon: LayoutDashboard },
   { to: "/projects", label: "Projects", icon: Boxes },
   { to: "/deployments", label: "Deployments", icon: Rocket },
-  { to: "/terminal", label: "Terminal", icon: Terminal },
   { to: "/files", label: "Files", icon: FolderTree },
   { to: "/code-editor", label: "Code Editor", icon: Code2 },
   { to: "/docker", label: "Docker", icon: Container },
+  { to: "/terminal", label: "Terminal", icon: Terminal },
   { to: "/metrics", label: "Metrics", icon: Activity },
   { to: "/domains", label: "Domains", icon: Globe },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -69,7 +69,7 @@ export function Sidebar() {
     >
       <div className={cn("flex items-center gap-2 p-4", collapsed && "justify-center")}
       >
-        <Logo variant={collapsed ? "mark" : "full"} size={collapsed ? "sm" : "md"} />
+        <Logo variant={collapsed ? "mark" : "full"} size={collapsed ? "sm" : "lg"} />
         <div className={cn("ml-auto", collapsed && "ml-0")}
         >
           <Button
@@ -108,8 +108,8 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="mt-auto border-t border-sidebar-border/70 p-2">
-        <div className={cn("mb-2 flex items-center gap-2 rounded-lg bg-sidebar-primary/80 p-2", collapsed && "justify-center")}>
+      <div className="mt-auto border-t border-sidebar-border/80 p-2">
+        <div className={cn("mb-2 flex items-center gap-2 rounded-lg bg-sidebar-primary/90 p-2", collapsed && "justify-center")}>
           <UserCircle2 className="size-5 shrink-0 text-gray-100" />
           <div className={cn("min-w-0", collapsed && "hidden")}>
             <div className="truncate text-xs font-semibold text-white">{user?.name ?? "User"}</div>
@@ -118,7 +118,7 @@ export function Sidebar() {
         </div>
         <Button
           variant="destructive"
-          className={cn("w-full justify-start gap-2", collapsed && "justify-center px-0")}
+          className={cn("w-full justify-start gap-2 bg-red-500/90 hover:bg-red-600/80 transition-colors duration-200 dark:bg-red-500 dark:hover:bg-red-600/90 cursor-pointer font-semibold text-white", collapsed && "justify-center px-0")}
           onClick={() => logout.mutate()}
           disabled={logout.isPending}
         >

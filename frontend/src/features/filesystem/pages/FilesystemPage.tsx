@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { ArrowLeft, Folder, File } from "lucide-react";
+import { ArrowLeft, Folder, File, Upload, Download, ExternalLink } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
+import { useAuthStore } from "@/stores/authStore";
 
 export function FilesystemPage() {
+  const token = useAuthStore((s) => s.accessToken);
   const [pathInput, setPathInput] = React.useState("/");
   const [currentPath, setCurrentPath] = React.useState("/");
   const [selected, setSelected] = React.useState<string>("");
@@ -24,6 +26,7 @@ export function FilesystemPage() {
   const [pdfUrl, setPdfUrl] = React.useState<string>("");
   const [imageUrl, setImageUrl] = React.useState<string>("");
   const [sheetRows, setSheetRows] = React.useState<string[][]>([]);
+  const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const listing = useQuery({
     queryKey: ["files", currentPath],
@@ -73,12 +76,12 @@ export function FilesystemPage() {
       const msg = err?.response?.data?.error?.message ?? "Could not read file";
       if (code === "file_too_large") {
         if (looksLikeImage(filePath)) {
-          setImageUrl(previewUrl(filePath));
+          setImageUrl(previewUrl(filePath, token));
           toast.success("Showing image preview via streaming");
           return;
         }
         if (looksLikePdf(filePath)) {
-          setPdfUrl(previewUrl(filePath));
+          setPdfUrl(previewUrl(filePath, token));
           toast.success("Showing PDF via streaming");
           return;
         }
@@ -108,6 +111,34 @@ export function FilesystemPage() {
       listing.refetch();
     },
   });
+
+  const uploadFiles = useMutation({
+    mutationFn: async ({ path, files }: { path: string; files: File[] }) => {
+      for (const file of files) {
+        await platformApi.uploadFile(path, file);
+      }
+      return files.length;
+    },
+    onSuccess: (count) => {
+      toast.success(`${count} file${count === 1 ? "" : "s"} uploaded`);
+      listing.refetch();
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.error?.message ?? "Upload failed");
+    },
+  });
+
+  const handleDownload = React.useCallback(
+    (targetPath: string) => {
+      const url = downloadUrl(targetPath, token);
+      const a = document.createElement("a");
+      a.href = url;
+      a.rel = "noopener";
+      a.target = "_blank";
+      a.click();
+    },
+    [token]
+  );
 
   return (
     <PageShell className="max-w-350">
@@ -161,6 +192,27 @@ export function FilesystemPage() {
             >
               New file
             </Button>
+            <input
+              ref={uploadInputRef}
+              type="file"
+              className="hidden"
+              multiple
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (!files.length) return;
+                uploadFiles.mutate({ path: currentPath, files });
+                e.currentTarget.value = "";
+              }}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => uploadInputRef.current?.click()}
+              disabled={uploadFiles.isPending}
+            >
+              <Upload className="size-4" />
+              Upload
+            </Button>
           </div>
           <div className="h-[70vh]">
             <ResizablePanels
@@ -171,38 +223,48 @@ export function FilesystemPage() {
                   </div>
                   <div className="h-[calc(70vh-40px)] overflow-auto p-2">
                     {(listing.data?.items ?? []).map((item) => (
-                      <button
-                        key={item.path}
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                        onClick={() => {
-                          if (item.is_dir) {
-                            setCurrentPath(item.path);
-                            setPathInput(item.path);
-                            return;
-                          }
-                          setSelected(item.path);
-                          setPdfUrl("");
-                          setImageUrl("");
-                          setSheetRows([]);
-                          setValue("");
-                          if (looksLikeImage(item.path)) {
-                            setImageUrl(previewUrl(item.path));
-                            return;
-                          }
-                          if (looksLikePdf(item.path)) {
-                            setPdfUrl(previewUrl(item.path));
-                            return;
-                          }
-                          readFile.mutate(item.path);
-                        }}
-                      >
-                        {item.is_dir ? (
-                          <Folder className="size-4 fill-primary/30 text-primary" />
-                        ) : (
-                          <File className="size-4 text-muted-foreground" />
-                        )}
-                        <span className="truncate">{item.name}</span>
-                      </button>
+                      <div key={item.path} className="group flex w-full items-center gap-1 rounded-md hover:bg-muted">
+                        <button
+                          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
+                          onClick={() => {
+                            if (item.is_dir) {
+                              setCurrentPath(item.path);
+                              setPathInput(item.path);
+                              return;
+                            }
+                            setSelected(item.path);
+                            setPdfUrl("");
+                            setImageUrl("");
+                            setSheetRows([]);
+                            setValue("");
+                            if (looksLikeImage(item.path)) {
+                              setImageUrl(previewUrl(item.path, token));
+                              return;
+                            }
+                            if (looksLikePdf(item.path)) {
+                              setPdfUrl(previewUrl(item.path, token));
+                              return;
+                            }
+                            readFile.mutate(item.path);
+                          }}
+                        >
+                          {item.is_dir ? (
+                            <Folder className="size-4 fill-primary/30 text-primary" />
+                          ) : (
+                            <File className="size-4 text-muted-foreground" />
+                          )}
+                          <span className="truncate">{item.name}</span>
+                        </button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="mr-1 size-7 opacity-70 group-hover:opacity-100"
+                          onClick={() => handleDownload(item.path)}
+                          title={item.is_dir ? "Download ZIP" : "Download file"}
+                        >
+                          <Download className="size-4" />
+                        </Button>
+                      </div>
                     ))}
                     {!listing.data?.items?.length ? (
                       <div className="p-2 text-sm text-muted-foreground">No files found in this path.</div>
@@ -217,6 +279,10 @@ export function FilesystemPage() {
                     <div className="flex items-center gap-2">
                       <Button size="sm" variant="outline" onClick={() => setSelected("")}>
                         Back
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => selected && handleDownload(selected)} disabled={!selected}>
+                        <Download className="size-4" />
+                        Download
                       </Button>
                       <Button
                         size="sm"
@@ -233,7 +299,21 @@ export function FilesystemPage() {
                         <img src={imageUrl} alt="File preview" className="max-h-full max-w-full object-contain" />
                       </div>
                     ) : pdfUrl ? (
-                      <iframe title="PDF preview" src={pdfUrl} className="h-full w-full" />
+                      <object data={pdfUrl} type="application/pdf" className="h-full w-full">
+                        <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                          <span>Inline PDF preview unavailable in this browser.</span>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}>
+                              <ExternalLink className="size-4" />
+                              Open in new tab
+                            </Button>
+                            <Button size="sm" onClick={() => selected && handleDownload(selected)} disabled={!selected}>
+                              <Download className="size-4" />
+                              Download
+                            </Button>
+                          </div>
+                        </div>
+                      </object>
                     ) : sheetRows.length > 0 ? (
                       <div className="h-full overflow-auto p-3">
                         <div className="mb-2 text-xs text-muted-foreground">Excel preview (first sheet, first 200 rows)</div>
@@ -284,8 +364,18 @@ function parentPath(path: string) {
   const p = normalized.slice(0, i);
   return p || "/";
 }
-function previewUrl(path: string) {
-  return `${env.apiBaseUrl}/files/download?path=${encodeURIComponent(path)}&inline=1`;
+function previewUrl(path: string, token?: string | null) {
+  const url = new URL(`${env.apiBaseUrl}/files/download`);
+  url.searchParams.set("path", path);
+  url.searchParams.set("inline", "1");
+  if (token) url.searchParams.set("token", token);
+  return url.toString();
+}
+function downloadUrl(path: string, token?: string | null) {
+  const url = new URL(`${env.apiBaseUrl}/files/download`);
+  url.searchParams.set("path", path);
+  if (token) url.searchParams.set("token", token);
+  return url.toString();
 }
 function detectLanguage(path: string, mime: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";

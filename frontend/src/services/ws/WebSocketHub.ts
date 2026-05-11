@@ -18,8 +18,11 @@ export class WebSocketHub {
   private handlers = new Map<string, Set<WsMessageHandler<any>>>();
   private reconnectTimers = new Map<string, number>();
   private reconnectAttempts = new Map<string, number>();
+  private baseUrl: string;
 
-  constructor(private baseUrl: string) {}
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
 
   getState(key: string): ConnectionState {
     return this.states.get(key) ?? { status: "disconnected" };

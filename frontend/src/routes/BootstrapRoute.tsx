@@ -1,4 +1,3 @@
-import * as React from "react";
 import { Navigate } from "react-router";
 
 import { useAuthStore } from "@/stores/authStore";

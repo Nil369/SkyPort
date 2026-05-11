@@ -4,7 +4,7 @@ import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 
 export function ModeToggle() {
-  const { theme, effectiveTheme, setTheme } = useTheme();
+  const { effectiveTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
