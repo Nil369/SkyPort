@@ -6,7 +6,7 @@
 //  3. Construct Fiber with production timeouts and JSON ErrorHandler.
 //  4. Build app.App (container): Fiber + DB + config.
 //  5. Register optional feature modules (terminal, docker, …).
-//  6. api.Mount: recovery, request logging, /api/v1 routes.
+//  6. api.Mount: recovery, request logging, GET /api, /api/v1, /docs.
 //  7. Invoke each module's Register for future route/worker attachment.
 //  8. Listen in a goroutine; block on SIGINT/SIGTERM.
 //  9. Shutdown HTTP with timeout; close database.
@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	swagger "github.com/swaggo/fiber-swagger"
 
 	docs "skyport/internal/docs"
 
@@ -36,6 +35,7 @@ import (
 	"skyport/internal/deployments"
 	"skyport/internal/docker"
 	"skyport/internal/filesystem"
+	"skyport/internal/frontend"
 	"skyport/internal/httperrors"
 	"skyport/internal/metrics"
 	"skyport/internal/orchestrator"
@@ -60,7 +60,7 @@ func Run(cfg *config.Config) error {
 	log.Printf(" env=%s listen=%s db=%s", cfg.Environment, displayListenURL(cfg), cfg.DBPath)
 	log.Printf(" modules: terminal=%t metrics=%t docker=%t filesystem=%t projects=%t",
 		cfg.EnableTerminal, cfg.EnableMetrics, cfg.EnableDocker, cfg.EnableFilesystem, cfg.EnableProjects)
-	log.Printf(" routes: GET / | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
+	log.Printf(" routes: GET / (UI) | GET /api | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
 	log.Printf(" docs: GET /docs/index.html")
 	log.Printf("==============================================")
 
@@ -122,10 +122,6 @@ func Build(cfg *config.Config) (*app.App, error) {
 	docs.SwaggerInfo.BasePath = "/"
 	docs.SwaggerInfo.Schemes = []string{"http"}
 
-	// Expose Swagger UI at /docs/* (serves index.html at /docs/index.html)
-	container.Fiber.Get("/docs/*", swagger.WrapHandler)
-	container.Fiber.Get("/docs", func(c *fiber.Ctx) error { return c.Redirect("/docs/index.html") })
-
 	container.RegisterModule(&websocket.Module{})
 	if cfg.EnableTerminal {
 		container.RegisterModule(&terminal.Module{})
@@ -156,6 +152,9 @@ func Build(cfg *config.Config) (*app.App, error) {
 			return nil, fmt.Errorf("module %q: %w", m.Name(), err)
 		}
 	}
+
+	// Embedded React SPA: register last so /api, /api/v1, /docs, /ws stay authoritative.
+	frontend.Mount(container)
 
 	return container, nil
 }

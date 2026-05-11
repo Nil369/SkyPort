@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gofiber/fiber/v2"
+	swagger "github.com/swaggo/fiber-swagger"
 
 	v1 "skyport/internal/api/v1"
 	"skyport/internal/app"
@@ -23,25 +24,29 @@ func Mount(a *app.App) {
 	a.Fiber.Use(middleware.CORS(a.Config.AllowedOrigins))
 	a.Fiber.Use(middleware.RateLimitPlaceholder())
 
-	a.Fiber.Get("/", rootHandler())
+	a.Fiber.Get("/api", apiRootHandler())
 
 	v1.Mount(a)
+
+	// Swagger UI (after /api and /api/v1 per routing contract)
+	a.Fiber.Get("/docs/*", swagger.WrapHandler)
+	a.Fiber.Get("/docs", func(c *fiber.Ctx) error { return c.Redirect("/docs/index.html") })
 }
 
-// rootHandler returns the service root metadata.
-// @Summary Root
+// apiRootHandler returns service metadata for operators and load balancers.
+// @Summary API root
 // @Tags Root
-// @Description Service root with basic metadata
+// @Description Service metadata and doc link
 // @Produce json
 // @Success 200 {object} map[string]interface{}
-// @Router / [get]
-func rootHandler() fiber.Handler {
+// @Router /api [get]
+func apiRootHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{
-			"service": "SkyPort",
-			"status":  "running",
-			"version": version.Version,
-			"message": "Welcome to SkyPort API! 🎉",
+			"message":        "Welcome to SkyPort API! 🎉",
+			"service":        "SkyPort",
+			"status":         "running",
+			"version":        version.Version,
 			"visit_api_docs": fmt.Sprintf("Visit the API docs at: %s/docs/index.html", c.BaseURL()),
 		})
 	}

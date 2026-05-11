@@ -14,6 +14,15 @@ definitions:
       user:
         $ref: '#/definitions/internal_auth.UserDTO'
     type: object
+  internal_auth.CredentialsDTO:
+    properties:
+      git_auth_type:
+        type: string
+      has_pat:
+        type: boolean
+      has_ssh_key:
+        type: boolean
+    type: object
   internal_auth.LoginRequest:
     properties:
       email:
@@ -44,6 +53,24 @@ definitions:
     - email
     - name
     - password
+    type: object
+  internal_auth.UpdateCredentialsRequest:
+    properties:
+      clear_pat:
+        type: boolean
+      clear_ssh_key:
+        type: boolean
+      git_auth_type:
+        enum:
+        - ssh
+        - pat
+        type: string
+      git_pat:
+        maxLength: 4096
+        type: string
+      git_ssh_key:
+        maxLength: 4096
+        type: string
     type: object
   internal_auth.UserDTO:
     properties:
@@ -112,6 +139,10 @@ definitions:
       container_username:
         maxLength: 255
         type: string
+      env:
+        additionalProperties:
+          type: string
+        type: object
       install_cmd:
         maxLength: 1024
         type: string
@@ -123,6 +154,12 @@ definitions:
         type: integer
       start_cmd:
         maxLength: 1024
+        type: string
+      strategy:
+        enum:
+        - docker
+        - pm2
+        - native
         type: string
       working_directory:
         maxLength: 512
@@ -156,6 +193,17 @@ definitions:
         - restart
         type: string
     type: object
+  internal_docker.commitRequest:
+    properties:
+      repository:
+        maxLength: 255
+        type: string
+      tag:
+        maxLength: 128
+        type: string
+    required:
+    - repository
+    type: object
   internal_docker.daemonRequest:
     properties:
       action:
@@ -167,10 +215,20 @@ definitions:
     required:
     - action
     type: object
+  internal_docker.imageRunRequest:
+    properties:
+      name:
+        maxLength: 128
+        type: string
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+    type: object
   internal_filesystem.createFileRequest:
     properties:
       content:
-        maxLength: 10000000
+        maxLength: 50000000
         type: string
       filename:
         maxLength: 255
@@ -215,7 +273,7 @@ definitions:
   internal_filesystem.writeFileRequest:
     properties:
       content:
-        maxLength: 10000000
+        maxLength: 50000000
         type: string
       encoding:
         enum:
@@ -444,8 +502,35 @@ definitions:
         maximum: 65535
         minimum: 1
         type: integer
+      project_id:
+        type: integer
       reload:
         type: boolean
+      type:
+        enum:
+        - caddy
+        - nginx
+        type: string
+    required:
+    - domain
+    - port
+    type: object
+  internal_proxy.mappingRequest:
+    properties:
+      domain:
+        maxLength: 255
+        type: string
+      email:
+        maxLength: 255
+        type: string
+      enable_ssl:
+        type: boolean
+      port:
+        maximum: 65535
+        minimum: 1
+        type: integer
+      project_id:
+        type: integer
       type:
         enum:
         - caddy
@@ -584,6 +669,8 @@ definitions:
         type: string
       path:
         type: string
+      port:
+        type: integer
       projectID:
         type: integer
       runtime:
@@ -591,6 +678,30 @@ definitions:
       status:
         type: string
       strategy:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  skyport_internal_models.DomainMapping:
+    properties:
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      domain:
+        type: string
+      email:
+        type: string
+      enable_ssl:
+        type: boolean
+      id:
+        type: integer
+      port:
+        type: integer
+      project_id:
+        type: integer
+      type:
+        description: caddy | nginx
         type: string
       updatedAt:
         type: string
@@ -609,6 +720,8 @@ definitions:
         type: string
       path:
         type: string
+      private:
+        type: boolean
       updatedAt:
         type: string
     type: object
@@ -639,9 +752,9 @@ info:
   title: SkyPort API
   version: 0.0.1
 paths:
-  /:
+  /api:
     get:
-      description: Service root with basic metadata
+      description: Service metadata and doc link
       produces:
       - application/json
       responses:
@@ -650,9 +763,55 @@ paths:
           schema:
             additionalProperties: true
             type: object
-      summary: Root
+      summary: API root
       tags:
       - Root
+  /api/v1/auth/credentials:
+    get:
+      description: Returns stored git credentials metadata
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_auth.CredentialsDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Git credentials
+      tags:
+      - Auth
+    post:
+      consumes:
+      - application/json
+      description: Stores git credentials for reuse on private repos
+      parameters:
+      - description: Credentials payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_auth.UpdateCredentialsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_auth.CredentialsDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: Update git credentials
+      tags:
+      - Auth
   /api/v1/auth/login:
     post:
       consumes:
@@ -1018,6 +1177,34 @@ paths:
       summary: Delete container
       tags:
       - Docker
+  /api/v1/docker/container/{name}/commit:
+    post:
+      consumes:
+      - application/json
+      description: Create a Docker image from a container by name or ID
+      parameters:
+      - description: Container name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Commit request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_docker.commitRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Commit container
+      tags:
+      - Docker
   /api/v1/docker/container/{name}/restart:
     post:
       description: Restart a Docker container by name or ID
@@ -1135,6 +1322,33 @@ paths:
       summary: Delete image
       tags:
       - Docker
+  /api/v1/docker/image/{name}/run:
+    post:
+      consumes:
+      - application/json
+      description: Run a Docker image to create a container
+      parameters:
+      - description: Image name or ID
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Run request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_docker.imageRunRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Run image
+      tags:
+      - Docker
   /api/v1/docker/images:
     get:
       description: List local Docker images
@@ -1161,20 +1375,6 @@ paths:
             additionalProperties: true
             type: object
       summary: Prune images
-      tags:
-      - Docker
-  /api/v1/docker/install:
-    post:
-      description: Detects host OS and returns recommended Docker install command
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      summary: Docker install helper
       tags:
       - Docker
   /api/v1/docker/start:
@@ -1782,6 +1982,38 @@ paths:
       summary: Delete project
       tags:
       - Projects
+  /api/v1/proxy/caddy/install:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Install Caddy
+      tags:
+      - Proxy
+  /api/v1/proxy/caddy/status:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Caddy status
+      tags:
+      - Proxy
   /api/v1/proxy/certbot:
     post:
       consumes:
@@ -1837,6 +2069,80 @@ paths:
       security:
       - BearerAuth: []
       summary: Generate reverse proxy config
+      tags:
+      - Proxy
+  /api/v1/proxy/mappings:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List proxy mappings
+      tags:
+      - Proxy
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mapping payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_proxy.mappingRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/skyport_internal_models.DomainMapping'
+      security:
+      - BearerAuth: []
+      summary: Create proxy mapping
+      tags:
+      - Proxy
+  /api/v1/proxy/mappings/{id}:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete proxy mapping
+      tags:
+      - Proxy
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Mapping payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_proxy.mappingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/skyport_internal_models.DomainMapping'
+      security:
+      - BearerAuth: []
+      summary: Update proxy mapping
       tags:
       - Proxy
   /api/v1/runtime/detect:
@@ -1926,6 +2232,26 @@ paths:
       security:
       - BearerAuth: []
       summary: Smart runtime install
+      tags:
+      - Runtime
+  /api/v1/runtime/pm2/list:
+    get:
+      description: Returns the current PM2 process list via pm2 jlist
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/skyport_internal_response.ErrorBody'
+      security:
+      - BearerAuth: []
+      summary: PM2 list
       tags:
       - Runtime
   /api/v1/runtime/pm2/startup:

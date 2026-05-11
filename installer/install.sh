@@ -1,38 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# SkyPort installer (backend service).
+# SkyPort single-binary installer (embedded UI + API). No Node.js or Go required.
 #
-# Usage (recommended):
-#   curl -fsSL https://skyport.akashhalder.in/install.sh | bash
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/Nil369/SkyPort/main/installer/install.sh | sudo bash
 #
 # Optional env overrides:
 #   SKYPORT_REPO="Nil369/SkyPort"
 #   SKYPORT_VERSION="v0.0.1"   # or "latest" (default)
 #   SKYPORT_PORT="8080"
 #   SKYPORT_HOST="0.0.0.0"
-#   SKYPORT_PUBLIC_URL="https://api.example.com"
-#   SKYPORT_DASHBOARD_URL="https://skyport.akashhalder.in"
-#
-# Notes:
-# - This installs ONLY the backend binary + service.
-# - If you host your dashboard on Vercel, nothing needs to be downloaded for UI.
-# - If you want a single-binary "embedded UI", that requires a separate build mode
-#   (serve built frontend assets from the Go server). Not enabled by this script.
+#   SKYPORT_PUBLIC_URL="https://skyport.example.com"   # recommended behind TLS reverse proxy
+#   ALLOWED_ORIGINS="https://skyport.example.com"      # defaults include loopback + SKYPORT_PUBLIC_URL
+#   JWT_SECRET / JWT_EXPIRES / TRUSTED_PROXIES / ENABLE_* module flags
 
 SKYPORT_REPO="${SKYPORT_REPO:-Nil369/SkyPort}"
 SKYPORT_VERSION="${SKYPORT_VERSION:-latest}"
 
-SKYPORT_HOST="${SKYPORT_HOST:-localhost}"
+SKYPORT_HOST="${SKYPORT_HOST:-0.0.0.0}"
 SKYPORT_PORT="${SKYPORT_PORT:-8080}"
 SKYPORT_PUBLIC_URL="${SKYPORT_PUBLIC_URL:-}"
-SKYPORT_DASHBOARD_URL="${SKYPORT_DASHBOARD_URL:-https://skyport.akashhalder.in}"
 
 INSTALL_DIR="/opt/skyport"
 DATA_DIR="${INSTALL_DIR}/data"
 WORKSPACE_DIR="${INSTALL_DIR}/workspace"
+CONFIG_DIR="/etc/skyport"
 BIN_PATH="/usr/local/bin/skyport"
-ENV_PATH="/etc/skyport/skyport.env"
+ENV_PATH="${CONFIG_DIR}/skyport.env"
 SERVICE_PATH="/etc/systemd/system/skyport.service"
 
 log() { echo "[skyport] $*"; }
@@ -48,7 +43,7 @@ detect_os() {
   case "$os" in
     linux) echo "linux" ;;
     darwin) echo "darwin" ;;
-    *) die "unsupported OS: $os (installer supports linux/darwin). Windows: use manual binary download for now." ;;
+    *) die "unsupported OS: $os (installer supports linux/darwin). Windows: download a release .exe from GitHub." ;;
   esac
 }
 
@@ -63,7 +58,6 @@ detect_arch() {
 }
 
 latest_tag() {
-  # No jq dependency; parse JSON with grep/sed.
   curl -fsSL "https://api.github.com/repos/${SKYPORT_REPO}/releases/latest" \
     | grep -m 1 '"tag_name"' \
     | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/'
@@ -73,12 +67,6 @@ download_url() {
   local version="$1"
   local os="$2"
   local arch="$3"
-  # Our build output directory format is: bin/<os>-<arch>/skyport(.exe)
-  # For releases, publish assets as:
-  #   skyport-<os>-<arch>  (no extension)
-  #
-  # Example:
-  #   https://github.com/Nil369/SkyPort/releases/download/v0.0.1/skyport-linux-amd64
   echo "https://github.com/${SKYPORT_REPO}/releases/download/${version}/skyport-${os}-${arch}"
 }
 
@@ -99,20 +87,24 @@ create_user_if_needed() {
   fi
 }
 
-write_env() {
-  mkdir -p "$(dirname "${ENV_PATH}")"
+default_allowed_origins() {
+  local o="http://127.0.0.1:${SKYPORT_PORT},http://localhost:${SKYPORT_PORT}"
+  if [ -n "${SKYPORT_PUBLIC_URL}" ]; then
+    o="${SKYPORT_PUBLIC_URL},${o}"
+  fi
+  echo "${o}"
+}
 
-  # Generate JWT secret if not provided.
+write_env() {
+  mkdir -p "${CONFIG_DIR}"
+
   local jwt_secret="${JWT_SECRET:-}"
   if [ -z "${jwt_secret}" ]; then
     jwt_secret="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48)"
   fi
 
-  # Default: 7 days
   local jwt_expires="${JWT_EXPIRES:-604800}"
-
-  # Allow dashboard origin for browser API calls.
-  local allowed_origins="${ALLOWED_ORIGINS:-${SKYPORT_DASHBOARD_URL},http://localhost:3000,http://localhost:5173}"
+  local allowed_origins="${ALLOWED_ORIGINS:-$(default_allowed_origins)}"
 
   cat >"${ENV_PATH}" <<EOF
 SKYPORT_HOST=${SKYPORT_HOST}
@@ -126,13 +118,13 @@ SKYPORT_SHUTDOWN_TIMEOUT_SEC=10
 JWT_SECRET=${jwt_secret}
 JWT_EXPIRES=${jwt_expires}
 ALLOWED_ORIGINS=${allowed_origins}
-TRUSTED_PROXIES=127.0.0.1,::1
+TRUSTED_PROXIES=${TRUSTED_PROXIES:-127.0.0.1,::1}
 
-ENABLE_TERMINAL=true
-ENABLE_METRICS=true
-ENABLE_DOCKER=true
-ENABLE_FILESYSTEM=true
-ENABLE_PROJECTS=true
+ENABLE_TERMINAL=${ENABLE_TERMINAL:-true}
+ENABLE_METRICS=${ENABLE_METRICS:-true}
+ENABLE_DOCKER=${ENABLE_DOCKER:-true}
+ENABLE_FILESYSTEM=${ENABLE_FILESYSTEM:-true}
+ENABLE_PROJECTS=${ENABLE_PROJECTS:-true}
 EOF
 
   if [ -n "${SKYPORT_PUBLIC_URL}" ]; then
@@ -150,12 +142,13 @@ install_binary_linux() {
 }
 
 install_service_linux() {
-  mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${WORKSPACE_DIR}"
+  mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${WORKSPACE_DIR}" "${CONFIG_DIR}"
   chown -R skyport:skyport "${INSTALL_DIR}" || true
 
   cat >"${SERVICE_PATH}" <<EOF
 [Unit]
-Description=SkyPort Backend API
+Description=SkyPort
+Documentation=https://github.com/${SKYPORT_REPO}
 After=network.target
 
 [Service]
@@ -169,7 +162,6 @@ Restart=always
 RestartSec=2
 NoNewPrivileges=true
 
-# Hardening (safe defaults)
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
@@ -203,24 +195,22 @@ main() {
 
   log "installing skyport ${version} (${os}-${arch})"
   create_user_if_needed
-  mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${WORKSPACE_DIR}"
+  mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${WORKSPACE_DIR}" "${CONFIG_DIR}"
 
   if [ "${os}" = "linux" ]; then
     install_binary_linux "${url}"
     write_env
     install_service_linux
-    log "installed. API: http://<server-ip>:${SKYPORT_PORT}"
-    log "swagger: http://<server-ip>:${SKYPORT_PORT}/docs/index.html"
-    log "dashboard: ${SKYPORT_DASHBOARD_URL} (Vercel hosted UI)"
+    log "installed. Open the UI (same port as the API), e.g. http://<server-ip>:${SKYPORT_PORT}/"
+    log "API metadata: GET http://<server-ip>:${SKYPORT_PORT}/api"
+    log "Swagger UI: http://<server-ip>:${SKYPORT_PORT}/docs/index.html"
   else
-    # macOS: install binary and env, but don't attempt to create a daemon by default.
     curl -fsSL "${url}" -o "${BIN_PATH}"
     chmod 755 "${BIN_PATH}"
-    mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${WORKSPACE_DIR}"
     write_env
     log "installed binary at ${BIN_PATH}"
     log "run: sudo ${BIN_PATH}"
-    log "swagger: http://127.0.0.1:${SKYPORT_PORT}/docs/index.html"
+    log "UI + API: http://127.0.0.1:${SKYPORT_PORT}/"
   fi
 }
 

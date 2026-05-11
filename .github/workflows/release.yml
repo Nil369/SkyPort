@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Install frontend and build UI
+        run: make frontend-build FRONTEND_USE_CI=1
+
+      - name: Regenerate Swagger
+        working-directory: backend
+        run: make swag-init
+
+      - name: Cross-compile binaries
+        working-directory: backend
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make build-all
+
+      # action-gh-release uses each file's basename as the asset name; installer expects
+      # skyport-<os>-<arch> (see installer/install.sh download_url).
+      - name: Stage release asset names
+        run: |
+          cp bin/linux-amd64/skyport skyport-linux-amd64
+          cp bin/linux-arm64/skyport skyport-linux-arm64
+          cp bin/windows-amd64/skyport.exe skyport-windows-amd64.exe
+          cp bin/darwin-amd64/skyport skyport-darwin-amd64
+          cp bin/darwin-arm64/skyport skyport-darwin-arm64
+          chmod +x skyport-linux-amd64 skyport-linux-arm64 skyport-darwin-amd64 skyport-darwin-arm64
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            skyport-linux-amd64
+            skyport-linux-arm64
+            skyport-windows-amd64.exe
+            skyport-darwin-amd64
+            skyport-darwin-arm64

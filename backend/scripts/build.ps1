@@ -1,15 +1,58 @@
+# Cross-compile SkyPort for all release platforms (Windows host).
+# Run from repo root:  powershell -NoProfile -File backend/scripts/build.ps1
+# Or from backend:     powershell -NoProfile -File scripts/build.ps1
+#
+# Env:
+#   VERSION        - semver / tag string for -ldflags (default 0.0.1)
+#   SYNC_FRONTEND  - set to 1 to copy ..\frontend\dist -> internal\frontend\dist before build
+#   GENERATE_DOCS  - set to 1 to run swag init first
+
 $ErrorActionPreference = "Stop"
+
+# This script lives in backend/scripts; module root is one level up.
+$BackendRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+Set-Location $BackendRoot
+
+if ($env:SYNC_FRONTEND -eq "1") {
+  $RepoRoot = Resolve-Path (Join-Path $BackendRoot "..")
+  $FeDist = Join-Path $RepoRoot "frontend\dist"
+  $EmbedDist = Join-Path $BackendRoot "internal\frontend\dist"
+  if (-not (Test-Path $FeDist)) {
+    Write-Error "SYNC_FRONTEND=1 but missing $FeDist - run 'npm run build' in frontend first, or run ..\scripts\sync-embed-ui.ps1"
+  }
+  Remove-Item -Recurse -Force $EmbedDist -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Force -Path $EmbedDist | Out-Null
+  Copy-Item -Path (Join-Path $FeDist "*") -Destination $EmbedDist -Recurse -Force
+  $WebDist = Join-Path $BackendRoot "web\dist"
+  Remove-Item -Recurse -Force $WebDist -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Force -Path $WebDist | Out-Null
+  Copy-Item -Path (Join-Path $FeDist "*") -Destination $WebDist -Recurse -Force
+  Write-Host "Synced frontend dist -> $EmbedDist"
+}
+
 $Version = $env:VERSION
 if (-not $Version) { $Version = "0.0.1" }
-$LdFlags = "-s -w -X skyport/internal/version.Version=$Version"
+
+$Commit = "dev"
+try {
+  $gitOut = & git -C $BackendRoot rev-parse --short HEAD 2>$null
+  if ($LASTEXITCODE -eq 0 -and $gitOut) { $Commit = $gitOut.Trim() }
+} catch { }
+
+$BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$LdFlags = "-s -w -X skyport/internal/version.Version=$Version -X skyport/internal/version.Commit=$Commit -X skyport/internal/version.BuildTime=$BuildTime"
+
 $GenerateDocs = $env:GENERATE_DOCS
 if ($GenerateDocs -eq "1") {
   if (Get-Command swag -ErrorAction SilentlyContinue) {
-    swag init -g cmd/server/main.go -o internal/docs
+    swag init -g cmd/server/main.go -o internal/docs --parseDependency --parseInternal
   } else {
-    go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o internal/docs
+    go run github.com/swaggo/swag/cmd/swag@latest init -g cmd/server/main.go -o internal/docs --parseDependency --parseInternal
   }
 }
+
+$BinRoot = Join-Path $BackendRoot "..\bin"
+New-Item -ItemType Directory -Force -Path $BinRoot | Out-Null
 
 $targets = @(
   @{ GOOS = "linux"; GOARCH = "amd64"; Ext = "" },
@@ -20,9 +63,18 @@ $targets = @(
 )
 
 foreach ($t in $targets) {
-  $outDir = "../bin/$($t.GOOS)-$($t.GOARCH)"
+  $outDir = Join-Path $BinRoot "$($t.GOOS)-$($t.GOARCH)"
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-  $env:GOOS = $t.GOOS
-  $env:GOARCH = $t.GOARCH
-  go build -trimpath -ldflags $LdFlags -o "$outDir/skyport$($t.Ext)" ./cmd/server
+  try {
+    $env:GOOS = $t.GOOS
+    $env:GOARCH = $t.GOARCH
+    $outFile = Join-Path $outDir "skyport$($t.Ext)"
+    Write-Host "Building $($t.GOOS)/$($t.GOARCH) -> $outFile"
+    go build -trimpath -ldflags $LdFlags -o $outFile ./cmd/server
+  } finally {
+    Remove-Item Env:\GOOS -ErrorAction SilentlyContinue
+    Remove-Item Env:\GOARCH -ErrorAction SilentlyContinue
+  }
 }
+
+Write-Host "Done. Artifacts under $BinRoot"

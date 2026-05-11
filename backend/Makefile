@@ -12,7 +12,17 @@ LDFLAGS      = -s -w \
 
 PLATFORMS    := linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64
 
-.PHONY: build-all build-all-with-docs test clean swag-init docs
+.PHONY: build build-all build-all-with-docs test clean swag-init docs release
+
+# Single native binary (default output: ../bin/skyport[.exe])
+build:
+ifeq ($(OS),Windows_NT)
+	@if not exist ..\bin mkdir ..\bin
+	go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/$(APP).exe ./cmd/server
+else
+	@mkdir -p ../bin
+	go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/$(APP) ./cmd/server
+endif
 
 build-all:
 ifeq ($(OS),Windows_NT)
@@ -53,3 +63,7 @@ ifeq ($(OS),Windows_NT)
 else
 	rm -rf ../bin
 endif
+
+# Release-quality cross-compiles (run from repo root `make release` so UI is embedded).
+release: build-all
+	@echo "release artifacts in ../bin/<GOOS>-<GOARCH>/"

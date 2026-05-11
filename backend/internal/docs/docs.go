@@ -22,22 +22,96 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/": {
+        "/api": {
             "get": {
-                "description": "Service root with basic metadata",
+                "description": "Service metadata and doc link",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Root"
                 ],
-                "summary": "Root",
+                "summary": "API root",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/credentials": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns stored git credentials metadata",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Git credentials",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_auth.CredentialsDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Stores git credentials for reuse on private repos",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Update git credentials",
+                "parameters": [
+                    {
+                        "description": "Credentials payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_auth.UpdateCredentialsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_auth.CredentialsDTO"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
                     }
                 }
@@ -612,6 +686,48 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/docker/container/{name}/commit": {
+            "post": {
+                "description": "Create a Docker image from a container by name or ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Commit container",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Container name or ID",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Commit request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_docker.commitRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/docker/container/{name}/restart": {
             "post": {
                 "description": "Restart a Docker container by name or ID",
@@ -788,6 +904,47 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/docker/image/{name}/run": {
+            "post": {
+                "description": "Run a Docker image to create a container",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Docker"
+                ],
+                "summary": "Run image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Image name or ID",
+                        "name": "name",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Run request",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/internal_docker.imageRunRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/docker/images": {
             "get": {
                 "description": "List local Docker images",
@@ -819,27 +976,6 @@ const docTemplate = `{
                     "Docker"
                 ],
                 "summary": "Prune images",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/docker/install": {
-            "post": {
-                "description": "Detects host OS and returns recommended Docker install command",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Docker"
-                ],
-                "summary": "Docker install helper",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1777,6 +1913,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/proxy/caddy/install": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Install Caddy",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/proxy/caddy/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Caddy status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/proxy/certbot": {
             "post": {
                 "security": [
@@ -1863,6 +2052,128 @@ const docTemplate = `{
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/proxy/mappings": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "List proxy mappings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Create proxy mapping",
+                "parameters": [
+                    {
+                        "description": "Mapping payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_proxy.mappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_models.DomainMapping"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/proxy/mappings/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Update proxy mapping",
+                "parameters": [
+                    {
+                        "description": "Mapping payload",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_proxy.mappingRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_models.DomainMapping"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Proxy"
+                ],
+                "summary": "Delete proxy mapping",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -1998,6 +2309,38 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/runtime/pm2/list": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns the current PM2 process list via pm2 jlist",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Runtime"
+                ],
+                "summary": "PM2 list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/skyport_internal_response.ErrorBody"
                         }
@@ -2214,6 +2557,20 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_auth.CredentialsDTO": {
+            "type": "object",
+            "properties": {
+                "git_auth_type": {
+                    "type": "string"
+                },
+                "has_pat": {
+                    "type": "boolean"
+                },
+                "has_ssh_key": {
+                    "type": "boolean"
+                }
+            }
+        },
         "internal_auth.LoginRequest": {
             "type": "object",
             "required": [
@@ -2253,6 +2610,32 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 128,
                     "minLength": 8
+                }
+            }
+        },
+        "internal_auth.UpdateCredentialsRequest": {
+            "type": "object",
+            "properties": {
+                "clear_pat": {
+                    "type": "boolean"
+                },
+                "clear_ssh_key": {
+                    "type": "boolean"
+                },
+                "git_auth_type": {
+                    "type": "string",
+                    "enum": [
+                        "ssh",
+                        "pat"
+                    ]
+                },
+                "git_pat": {
+                    "type": "string",
+                    "maxLength": 4096
+                },
+                "git_ssh_key": {
+                    "type": "string",
+                    "maxLength": 4096
                 }
             }
         },
@@ -2357,6 +2740,12 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 255
                 },
+                "env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
                 "install_cmd": {
                     "type": "string",
                     "maxLength": 1024
@@ -2372,6 +2761,14 @@ const docTemplate = `{
                 "start_cmd": {
                     "type": "string",
                     "maxLength": 1024
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": [
+                        "docker",
+                        "pm2",
+                        "native"
+                    ]
                 },
                 "working_directory": {
                     "type": "string",
@@ -2419,6 +2816,22 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_docker.commitRequest": {
+            "type": "object",
+            "required": [
+                "repository"
+            ],
+            "properties": {
+                "repository": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "tag": {
+                    "type": "string",
+                    "maxLength": 128
+                }
+            }
+        },
         "internal_docker.daemonRequest": {
             "type": "object",
             "required": [
@@ -2435,6 +2848,20 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_docker.imageRunRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 128
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                }
+            }
+        },
         "internal_filesystem.createFileRequest": {
             "type": "object",
             "required": [
@@ -2443,7 +2870,7 @@ const docTemplate = `{
             "properties": {
                 "content": {
                     "type": "string",
-                    "maxLength": 10000000
+                    "maxLength": 50000000
                 },
                 "filename": {
                     "type": "string",
@@ -2509,7 +2936,7 @@ const docTemplate = `{
             "properties": {
                 "content": {
                     "type": "string",
-                    "maxLength": 10000000
+                    "maxLength": 50000000
                 },
                 "encoding": {
                     "type": "string",
@@ -2830,8 +3257,46 @@ const docTemplate = `{
                     "maximum": 65535,
                     "minimum": 1
                 },
+                "project_id": {
+                    "type": "integer"
+                },
                 "reload": {
                     "type": "boolean"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "caddy",
+                        "nginx"
+                    ]
+                }
+            }
+        },
+        "internal_proxy.mappingRequest": {
+            "type": "object",
+            "required": [
+                "domain",
+                "port"
+            ],
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "email": {
+                    "type": "string",
+                    "maxLength": 255
+                },
+                "enable_ssl": {
+                    "type": "boolean"
+                },
+                "port": {
+                    "type": "integer",
+                    "maximum": 65535,
+                    "minimum": 1
+                },
+                "project_id": {
+                    "type": "integer"
                 },
                 "type": {
                     "type": "string",
@@ -3025,6 +3490,9 @@ const docTemplate = `{
                 "path": {
                     "type": "string"
                 },
+                "port": {
+                    "type": "integer"
+                },
                 "projectID": {
                     "type": "integer"
                 },
@@ -3035,6 +3503,42 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "strategy": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "skyport_internal_models.DomainMapping": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "enable_ssl": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "type": {
+                    "description": "caddy | nginx",
                     "type": "string"
                 },
                 "updatedAt": {
@@ -3062,6 +3566,9 @@ const docTemplate = `{
                 },
                 "path": {
                     "type": "string"
+                },
+                "private": {
+                    "type": "boolean"
                 },
                 "updatedAt": {
                     "type": "string"

@@ -144,6 +144,9 @@ vite.config.ts.timestamp-*
 
 # Custom files/folders
 dist/
+# Allow Go-embedded SPA bundle (root `dist` rule would otherwise untrack it)
+!backend/internal/frontend/dist/
+!backend/internal/frontend/dist/**
 build/
 bin/
 release/
