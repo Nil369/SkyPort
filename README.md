@@ -4,9 +4,7 @@
 
 **The Lightweight Developer Cloud OS**
 
-Self-hosted infrastructure for developers who want a calm, modern control plane on a small VPS—without sacrificing ambition.
-
-> **Status:** Early-stage and **actively developed**. The backend now includes Swagger docs, REST APIs, WebSocket routes, filesystem operations, Docker controls, and project cloning. The dashboard is still scaffolding.
+> Self-hosted infrastructure for developers who want a calm, modern control plane on a small VPS—without sacrificing ambition.
 
 ---
 
@@ -47,10 +45,13 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 <img width="1919" height="907" alt="image" src="https://github.com/user-attachments/assets/3add198a-99db-4373-83d0-8620c01647b3" />
 
 ### 4. Pull Your Project From Github (Even Private One!)
-<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/4d3d6936-32b7-4444-8484-f88dd7267d40" />
+<img width="1911" height="906" alt="image" src="https://github.com/user-attachments/assets/b49af8d0-f774-42fe-8b7d-7806c0db7157" />
 
 ### 5. Docker & Container Orchestration(Coming Soon)
-<img width="1919" height="905" alt="image" src="https://github.com/user-attachments/assets/895398f6-0de4-4fa9-8026-740e11aabeed" />
+<img width="1905" height="894" alt="image" src="https://github.com/user-attachments/assets/2a442769-9513-4315-bd04-9423bca2067c" />
+
+### 6. PM2 Process manager for low-end VPS (512MB ram constraint!)
+<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/982567c3-2ee7-496a-ab78-8caabd257894" />
 
 ---
 
