@@ -208,7 +208,7 @@
 
 /* Handle */
 ::-webkit-scrollbar-thumb {
-  background:  #85b4ff94;
+  background:  #034ec794;
   border-radius: 6px;
 }
 
@@ -218,7 +218,7 @@
 }
 
 ::selection {
-  background-color: #85b4ff42;
+  background-color: #afceff42;
   color: #012c71;
 }
 

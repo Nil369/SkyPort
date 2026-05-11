@@ -37,8 +37,8 @@ const items = [
   { to: "/docker", label: "Docker", icon: Container },
   { to: "/terminal", label: "Terminal", icon: Terminal },
   { to: "/process-manager", label: "Process Manager", icon: Cpu },
-  { to: "/metrics", label: "Metrics", icon: Activity },
   { to: "/domains", label: "Domains", icon: Globe },
+  { to: "/metrics", label: "Metrics", icon: Activity },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

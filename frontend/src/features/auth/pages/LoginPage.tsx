@@ -85,8 +85,12 @@ export function LoginPage() {
         </Button>
       </form>
 
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground text-center">
         Don’t have an account? <Link className="text-primary hover:underline" to="/register">Register</Link>
+      </div>
+
+      <div className="text-xs text-muted-foreground text-center">
+        Made by <a className="text-primary hover:underline" href="https://www.akashhalder.in/" target="_blank" rel="noreferrer">Akash Halder Technologia</a>
       </div>
     </div>
   );

@@ -287,11 +287,13 @@ func (m *Module) runDeployment(ctx context.Context, a *app.App, d *models.Deploy
 					return
 				}
 			}
-			tagCmd := fmt.Sprintf("docker tag %s %s", imageName, fullImage)
-			log("building", tagCmd)
-			if err := runStep(ctx, workRoot, env, tagCmd, logf, m.logs, d.ID); err != nil {
-				_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
-				return
+			if fullImage != imageName {
+				tagCmd := fmt.Sprintf("docker tag %s %s", imageName, fullImage)
+				log("building", tagCmd)
+				if err := runStep(ctx, workRoot, env, tagCmd, logf, m.logs, d.ID); err != nil {
+					_ = a.DB.Model(d).Updates(map[string]any{"status": "failed", "error": err.Error()}).Error
+					return
+				}
 			}
 			if req.ContainerPush {
 				pushCmd := fmt.Sprintf("docker push %s", fullImage)

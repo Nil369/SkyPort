@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Download, ExternalLink, ImagePlus, Play, Square, Trash2 } from "lucide-react";
 import { useLocation } from "react-router";
@@ -15,17 +16,26 @@ export function DockerPage() {
   const status = useQuery({ queryKey: ["docker-status"], queryFn: platformApi.dockerStatus });
   const containers = useQuery({ queryKey: ["docker-containers"], queryFn: platformApi.listContainers });
   const images = useQuery({ queryKey: ["docker-images"], queryFn: platformApi.listImages });
+  const [installNote, setInstallNote] = React.useState<string | null>(null);
+  const [installError, setInstallError] = React.useState<string | null>(null);
   const daemon = useMutation({ mutationFn: platformApi.dockerDaemon, onSuccess: () => status.refetch() });
   const dockerInstall = useMutation({
     mutationFn: platformApi.dockerInstall,
     onSuccess: (data: any) => {
+      setInstallError(null);
       if (data?.install) {
+        setInstallNote(String(data.install));
         toast.success("Install command ready");
       } else if (data?.executed) {
+        setInstallNote(null);
         toast.success("Docker install started");
       }
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Docker install failed"),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? "Docker install failed";
+      setInstallError(msg);
+      toast.error("Docker install failed. See details below.");
+    },
   });
   const startContainer = useMutation({
     mutationFn: platformApi.startContainer,
@@ -122,6 +132,20 @@ export function DockerPage() {
             Install Docker
           </Button>
         </CardContent>
+        {installNote || installError ? (
+          <CardContent className="pt-0">
+            {installNote ? (
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">
+                {installNote}
+              </div>
+            ) : null}
+            {installError ? (
+              <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600">
+                {installError}
+              </div>
+            ) : null}
+          </CardContent>
+        ) : null}
       </Card>
 
       <Card>
@@ -135,6 +159,8 @@ export function DockerPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Image</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Ports</TableHead>
+                <TableHead>URL</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -145,18 +171,29 @@ export function DockerPage() {
                 const statusText = String(c.status ?? "-");
                 const isRunning = state === "running" || statusText.toLowerCase().includes("up");
                 const hostPort = parseDockerHostPort(String(c.ports ?? ""));
+                const url = hostPort ? `http://localhost:${hostPort}` : "";
                 return (
                   <TableRow key={c.id}>
                     <TableCell>{c.names || "-"}</TableCell>
                     <TableCell>{c.image || "-"}</TableCell>
                     <TableCell>{statusText}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{c.ports || "-"}</TableCell>
+                    <TableCell className="text-xs">
+                      {url ? (
+                        <a className="text-primary hover:underline" href={url} target="_blank" rel="noreferrer">
+                          {url}
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Button
                           size="icon"
                           variant="outline"
                           aria-label="Launch container"
-                          onClick={() => window.open(`http://localhost:${hostPort}`, "_blank", "noopener,noreferrer")}
+                          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
                           disabled={!isRunning || !hostPort}
                         >
                           <ExternalLink className="size-4" />
@@ -213,7 +250,7 @@ export function DockerPage() {
               })}
               {!filteredContainers.length ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No containers found.
                   </TableCell>
                 </TableRow>

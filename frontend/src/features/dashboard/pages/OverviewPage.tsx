@@ -138,6 +138,37 @@ export function OverviewPage() {
             </div>
           </CardContent>
         </Card>
+
+        <section className="lg:col-span-12">
+          <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.16),transparent_55%),linear-gradient(135deg,rgba(15,23,42,1),rgba(17,24,39,0.85))] p-6 text-white">
+            <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[conic-gradient(at_top_left,#facc15,#22c55e,#60a5fa,#a855f7,#facc15)] opacity-20 blur-2xl" />
+            <div className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-[radial-gradient(circle,#38bdf8,transparent_65%)] opacity-25" />
+            <div className="relative z-10 grid gap-5 lg:grid-cols-[1.2fr,0.8fr]">
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/70">
+                  Launch partner
+                </div>
+                <h3 className="text-3xl font-semibold leading-tight">
+                  Build a bold developer ecosystem with {""}
+                  <span className="font-bold text-blue-400">Akash Halder Technologia!</span>
+                </h3>
+                <p className="text-sm text-white/70">
+                  High‑impact product strategy, UI systems, and full‑stack execution for founder‑led teams.
+                </p>
+              </div>
+              <div className="flex items-center justify-start lg:justify-end">
+                <a
+                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:translate-y-[-1px]"
+                  href="https://www.akashhalder.in/"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Visit akashhalder.in
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </PageShell>
   );

@@ -382,6 +382,7 @@ type containerInfo struct {
 	Ports   string `json:"ports"`
 	State   string `json:"state"`
 	Created string `json:"created"`
+	Context string `json:"context,omitempty"`
 }
 
 type commitRequest struct {
@@ -398,34 +399,58 @@ type commitRequest struct {
 // @Router /api/v1/docker/containers [get]
 func listContainersHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(c.UserContext(), 12*time.Second)
 		defer cancel()
 
-		output, err := runDocker(ctx, "ps", "-a", "--format", "{{json .}}")
-		if err != nil {
-			return response.Error(c, fiber.StatusServiceUnavailable, "list_failed", err.Error())
+		contexts := listDockerContexts(ctx)
+		currentContext := strings.TrimSpace(dockerContextShow(ctx))
+		if currentContext != "" {
+			contexts = append([]string{currentContext}, contexts...)
 		}
+		if runtime.GOOS == "windows" {
+			contexts = append(contexts, "desktop-linux", "desktop-windows")
+		}
+		contexts = append(contexts, "default")
 
-		containers := parseDockerContainers(output)
-
-		if len(containers) == 0 && runtime.GOOS == "windows" {
-			for _, ctxName := range []string{"desktop-linux", "default"} {
-				fallbackOut, fbErr := runDockerWithContext(ctx, ctxName, "ps", "-a", "--format", "{{json .}}")
-				if fbErr != nil {
-					continue
-				}
-				containers = parseDockerContainers(fallbackOut)
-				if len(containers) > 0 {
-					break
+		seen := map[string]bool{}
+		unique := map[string]containerInfo{}
+		for _, ctxName := range contexts {
+			name := strings.TrimSpace(ctxName)
+			if name == "" || seen[name] {
+				continue
+			}
+			seen[name] = true
+			out, err := runDockerWithContext(ctx, name, "ps", "-a", "--format", "{{json .}}")
+			if err != nil {
+				continue
+			}
+			parsed := parseDockerContainers(out, name)
+			if len(parsed) == 0 {
+				fallback, fbErr := runDockerWithContext(ctx, name, "ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.State}}\t{{.CreatedAt}}")
+				if fbErr == nil {
+					parsed = parseDockerContainersTSV(fallback, name)
 				}
 			}
+			for _, info := range parsed {
+				if info.ID == "" {
+					continue
+				}
+				if _, ok := unique[info.ID]; !ok {
+					unique[info.ID] = info
+				}
+			}
+		}
+
+		containers := make([]containerInfo, 0, len(unique))
+		for _, info := range unique {
+			containers = append(containers, info)
 		}
 
 		return response.OK(c, fiber.Map{"containers": containers})
 	}
 }
 
-func parseDockerContainers(output []byte) []containerInfo {
+func parseDockerContainers(output []byte, ctxName string) []containerInfo {
 	containers := make([]containerInfo, 0)
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	for _, line := range lines {
@@ -444,9 +469,67 @@ func parseDockerContainers(output []byte) []containerInfo {
 			Ports:   data["Ports"],
 			State:   data["State"],
 			Created: data["CreatedAt"],
+			Context: ctxName,
 		})
 	}
 	return containers
+}
+
+func parseDockerContainersTSV(output []byte, ctxName string) []containerInfo {
+	containers := make([]containerInfo, 0)
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 3 {
+			continue
+		}
+		info := containerInfo{Context: ctxName}
+		info.ID = strings.TrimSpace(parts[0])
+		info.Names = strings.TrimSpace(parts[1])
+		info.Image = strings.TrimSpace(parts[2])
+		if len(parts) > 3 {
+			info.Status = strings.TrimSpace(parts[3])
+		}
+		if len(parts) > 4 {
+			info.Ports = strings.TrimSpace(parts[4])
+		}
+		if len(parts) > 5 {
+			info.State = strings.TrimSpace(parts[5])
+		}
+		if len(parts) > 6 {
+			info.Created = strings.TrimSpace(parts[6])
+		}
+		containers = append(containers, info)
+	}
+	return containers
+}
+
+func listDockerContexts(ctx context.Context) []string {
+	out, err := runDocker(ctx, "context", "ls", "--format", "{{.Name}}")
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	contexts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name != "" {
+			contexts = append(contexts, name)
+		}
+	}
+	return contexts
+}
+
+func dockerContextShow(ctx context.Context) string {
+	out, err := runDocker(ctx, "context", "show")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // containerStartHandler starts a Docker container.

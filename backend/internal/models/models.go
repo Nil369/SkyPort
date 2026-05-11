@@ -20,6 +20,7 @@ func All() []any {
 		&Runtime{},
 		&Process{},
 		&EnvironmentVariable{},
+		&DomainMapping{},
 	}
 }
 
@@ -106,4 +107,19 @@ type EnvironmentVariable struct {
 	Key          string `gorm:"size:255;index;not null"`
 	Value        string `gorm:"size:4096;not null"`
 	Masked       bool   `gorm:"not null;default:false"`
+}
+
+// DomainMapping stores reverse proxy mappings (domain -> local port).
+type DomainMapping struct {
+	ID        uint `gorm:"primaryKey"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+
+	Domain    string `gorm:"size:255;index;not null" json:"domain"`
+	Port      int    `gorm:"not null" json:"port"`
+	Type      string `gorm:"size:16;not null" json:"type"` // caddy | nginx
+	EnableSSL bool   `gorm:"not null;default:false" json:"enable_ssl"`
+	Email     string `gorm:"size:255" json:"email,omitempty"`
+	ProjectID *uint  `gorm:"index" json:"project_id"`
 }

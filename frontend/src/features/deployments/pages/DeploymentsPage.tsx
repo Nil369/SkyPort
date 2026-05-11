@@ -185,7 +185,7 @@ export function DeploymentsPage() {
                     <li>
                       Port: <span className="font-mono text-foreground/80">{d.port || "-"}</span>
                     </li>
-                    <li className="break-words">
+                    <li className="wrap-break-word">
                       Error: <span className="font-mono text-foreground/80">{d.error || "-"}</span>
                     </li>
                   </ul>

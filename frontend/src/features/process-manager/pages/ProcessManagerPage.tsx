@@ -19,6 +19,8 @@ export function ProcessManagerPage() {
   const [port, setPort] = React.useState("");
   const [envText, setEnvText] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [installNote, setInstallNote] = React.useState<string | null>(null);
+  const [installError, setInstallError] = React.useState<string | null>(null);
 
   const pm2Status = useQuery({
     queryKey: ["pm2-status"],
@@ -46,10 +48,16 @@ export function ProcessManagerPage() {
   const pm2Install = useMutation({
     mutationFn: () => platformApi.runtimeInstall("pm2", true),
     onSuccess: () => {
+      setInstallError(null);
+      setInstallNote(null);
       toast.success("PM2 install started");
       pm2Status.refetch();
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "PM2 install failed"),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error?.message ?? "PM2 install failed";
+      setInstallError(msg);
+      toast.error("PM2 install failed. See details below.");
+    },
   });
 
   const pm2Action = useMutation({
@@ -102,6 +110,20 @@ export function ProcessManagerPage() {
             PM2 docs
           </Button>
         </CardContent>
+        {installNote || installError ? (
+          <CardContent className="pt-0">
+            {installNote ? (
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">
+                {installNote}
+              </div>
+            ) : null}
+            {installError ? (
+              <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600">
+                {installError}
+              </div>
+            ) : null}
+          </CardContent>
+        ) : null}
       </Card>
 
       <Card>

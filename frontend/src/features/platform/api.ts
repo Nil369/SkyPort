@@ -82,6 +82,17 @@ export type Pm2Process = {
   monit?: Record<string, any>;
 };
 
+export type DomainMapping = {
+  id: number;
+  domain: string;
+  port: number;
+  type: "caddy" | "nginx";
+  enable_ssl: boolean;
+  email?: string;
+  project_id?: number | null;
+  created_at?: string;
+};
+
 const normalizeProject = (raw: any): Project => ({
   id: raw?.id ?? raw?.ID ?? raw?.Id ?? 0,
   name: raw?.name ?? raw?.Name ?? "",
@@ -195,6 +206,15 @@ export const platformApi = {
     return (await http.post(`/runtime/pm2/${encodeURIComponent(name)}/${action}`)).data;
   },
 
-  generateDomainProxy: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string }) =>
+  generateDomainProxy: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number }) =>
     (await http.post("/proxy/generate", { ...input, execute: false, reload: false })).data,
+
+  listDomainMappings: async () => (await http.get<{ mappings: DomainMapping[] }>("/proxy/mappings")).data,
+  createDomainMapping: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null }) =>
+    (await http.post<DomainMapping>("/proxy/mappings", input)).data,
+  updateDomainMapping: async (id: number, input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null }) =>
+    (await http.put<DomainMapping>(`/proxy/mappings/${id}`, input)).data,
+  deleteDomainMapping: async (id: number) => (await http.delete(`/proxy/mappings/${id}`)).data,
+  caddyStatus: async () => (await http.get<{ installed: boolean; path?: string; version?: string }>("/proxy/caddy/status")).data,
+  caddyInstall: async (execute: boolean) => (await http.post("/proxy/caddy/install", { execute })).data,
 };

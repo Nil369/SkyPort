@@ -124,8 +124,12 @@ export function SetupWizardPage() {
         </Button>
       </form>
 
-      <div className="text-xs text-muted-foreground">
+      <div className="text-xs text-muted-foreground text-center">
         Setup is safe to rerun if no users exist.
+      </div>
+
+      <div className="text-xs text-muted-foreground text-center">
+        Made by <a className="text-primary hover:underline" href="https://www.akashhalder.in/" target="_blank" rel="noreferrer">Akash Halder Technologia</a>
       </div>
     </div>
   );
