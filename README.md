@@ -28,44 +28,29 @@ We believe teams and solo builders should own their runtime, data, and UX—whet
 
 ---
 
-## Implemented so far
+# 📸 Screenshots
 
-- Modular Go backend with Fiber, SQLite/GORM, config, middleware, and versioned routes.
-- Swagger/OpenAPI docs (`/docs`) with JWT Bearer on protected APIs.
-- **Auth**: register, login, JWT, protected routes where configured.
-- **Projects**: JWT required; clone public HTTPS repos or private via PAT / SSH keys; clarified in API docs.
-- **Runtime detection** (`POST /api/v1/runtime/detect`): recursive scan under repo (skips `node_modules`, `.git`, …; depth capped), discovers `docker-compose` / Dockerfile / Node / Bun / Python / Go / Rust / Java / PHP, monorepo hints (`server/` vs `client/`), suggests `working_directory` and suggested install/build/start commands.
-- **Capabilities** (`GET /api/v1/system/capabilities`): RAM/swap/cores, Docker CLI vs daemon reachable, coarse deployment recommendation.
-- **Runtime install** (`POST /api/v1/runtime/install`): checks PATH first (skip if already present); `dry_run` overrides `execute` for safety; previews or runs OS-specific installers.
-- **Smart runtime install** (`POST /api/v1/runtime/install/smart`): detects runtime under a repo path and installs minimal dependencies; compose/docker results return Docker install hints.
-- **Deployments** (`/api/v1/deployments`): create/list/get/delete; env vars (+ bulk `.env`-style payload); prefetch **runtime & strategy on create**; `auto_start` runs install/build/start as subprocesses **in resolved working directory**; invalid `working_directory` falls back to detection then repo root; WebSocket **`/ws/deployments/:id/logs`** for streamed logs. *(Request field `port` is reserved—not yet injected into proxy or env automatically.)*
-- **Process manager**: in-process tracker; starts app as **direct subprocess** (`Cmd.Dir` set to resolved app folder).
-- **Proxy**: generates Caddy or Nginx config files under workspace `proxy/`; optional reload + SSL helpers (Caddy TLS email / Nginx cert paths + certbot helper).
-- **Orchestrator**: Swarm/K8s helpers (status, deploy, compose convert, K8s manifest generator, and health checks), plus kubectl install helper endpoint.
-- Docker REST module: daemon/containers/images/volumes (operational primitives—**not** the same as full Coolify-style app orchestration yet).
-- WebSocket metrics + terminal where enabled; filesystem; metrics payloads with human-readable sizes.
-
----
-
-## Architecture overview
-
-```text
-SkyPort/
-├── backend/          # Go API — Fiber, GORM, SQLite, modules (metrics, terminal, …)
-│   └── cmd/server/   # Single binary entrypoint
-└── frontend/         # React + TypeScript (Vite) — UI coming online incrementally
-```
-
-- **API layer** — Versioned routes under `/api/v1`; middleware for logging, panic recovery, and future auth.
-- **Modules** — Feature packages register routes or background work through a shared `App` container (easy to extend).
-- **Persistence** — SQLite today for simplicity and low RAM; schema evolution via GORM migrations.
-- **Realtime** — WebSocket-ready patterns (e.g. metrics stream); additional channels will follow the same lifecycle rules (one connection, bounded work, clean teardown).
-
----
-
-## Screenshots
+## Backend API Docs:
 
 <img width="1314" height="915" alt="image" src="https://github.com/user-attachments/assets/eded94ba-aec2-4478-bc82-f4cfb91145e2" />
+
+## Dashboard After Booting Up and Login:
+
+### 1.Overview:
+
+<img width="1919" height="913" alt="image" src="https://github.com/user-attachments/assets/9090692d-e09b-4425-925c-8fd9fae4e932" />
+
+### 2. Dark Mode & File System (No Need of FTP Clients):
+<img width="1919" height="916" alt="image" src="https://github.com/user-attachments/assets/cefd2731-e241-4117-9133-f4abc4304be1" />
+
+### 3. Virual Terminal:
+<img width="1919" height="907" alt="image" src="https://github.com/user-attachments/assets/3add198a-99db-4373-83d0-8620c01647b3" />
+
+### 4. Pull Your Project From Github (Even Private One!)
+<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/4d3d6936-32b7-4444-8484-f88dd7267d40" />
+
+### 5. Docker & Container Orchestration(Coming Soon)
+<img width="1919" height="905" alt="image" src="https://github.com/user-attachments/assets/895398f6-0de4-4fa9-8026-740e11aabeed" />
 
 ---
 
