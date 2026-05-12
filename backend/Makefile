@@ -37,7 +37,13 @@ else
 		OUT_DIR="../bin/$$OS-$$ARCH"; \
 		mkdir -p $$OUT_DIR; \
 		echo "  -> $$OS/$$ARCH"; \
+		rm -f cmd/server/resource.syso; \
+		if [ "$$OS" = "windows" ] && [ -f ../assets/logo.ico ]; then \
+			echo "     embedding ../assets/logo.ico"; \
+			go run github.com/akavel/rsrc@v0.10.2 -ico ../assets/logo.ico -o cmd/server/resource.syso; \
+		fi; \
 		GOOS=$$OS GOARCH=$$ARCH go build -trimpath -ldflags "$(LDFLAGS)" -o $$OUT_DIR/$(APP)$$EXT ./cmd/server; \
+		rm -f cmd/server/resource.syso; \
 	done
 endif
 

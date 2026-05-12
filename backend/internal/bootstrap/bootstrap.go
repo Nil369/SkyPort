@@ -27,9 +27,13 @@ import (
 
 	docs "skyport/internal/docs"
 
+	"skyport/internal/access"
+	"skyport/internal/agent"
 	"skyport/internal/api"
 	"skyport/internal/app"
+	"skyport/internal/audit"
 	"skyport/internal/capabilities"
+	"skyport/internal/cluster"
 	"skyport/internal/config"
 	"skyport/internal/database"
 	"skyport/internal/deployments"
@@ -37,32 +41,40 @@ import (
 	"skyport/internal/filesystem"
 	"skyport/internal/frontend"
 	"skyport/internal/httperrors"
+	"skyport/internal/marketplace"
 	"skyport/internal/metrics"
 	"skyport/internal/orchestrator"
 	"skyport/internal/projects"
 	"skyport/internal/proxy"
 	"skyport/internal/runtime"
+	"skyport/internal/startup"
 	"skyport/internal/system"
 	"skyport/internal/terminal"
-	"skyport/internal/version"
+	"skyport/internal/users"
 	"skyport/internal/websocket"
 )
 
 // Run loads dependencies, serves HTTP, and blocks until shutdown completes.
 func Run(cfg *config.Config) error {
+	started := time.Now()
 	a, err := Build(cfg)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("==============================================")
-	log.Printf(" SkyPort API %s", version.Version)
-	log.Printf(" env=%s listen=%s db=%s", cfg.Environment, displayListenURL(cfg), cfg.DBPath)
-	log.Printf(" modules: terminal=%t metrics=%t docker=%t filesystem=%t projects=%t",
-		cfg.EnableTerminal, cfg.EnableMetrics, cfg.EnableDocker, cfg.EnableFilesystem, cfg.EnableProjects)
-	log.Printf(" routes: GET / (UI) | GET /api | GET /api/v1/health | GET /api/v1/system/info | WS /ws/terminal | WS /ws/metrics")
-	log.Printf(" docs: GET /docs/index.html")
-	log.Printf("==============================================")
+	baseURL := displayListenURL(cfg)
+	startup.PrintSplash(os.Stdout, time.Since(started), startup.Options{
+		Environment:      cfg.Environment,
+		AddrHTTP:         cfg.Addr(),
+		BaseURL:          baseURL,
+		EmbeddedFrontend: embeddedDistReady(),
+		SQLiteOK:         a.DB != nil,
+		WebSocketHubOK:   true,
+		ModulesOK:        true,
+		DockerOK:         cfg.EnableDocker,
+		EnableTerminal:   cfg.EnableTerminal,
+		EnableMetrics:    cfg.EnableMetrics,
+	})
 
 	go func() {
 		if err := a.Fiber.Listen(cfg.Addr()); err != nil {
@@ -98,6 +110,10 @@ func Build(cfg *config.Config) (*app.App, error) {
 	db, err := database.Initialize(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("database: %w", err)
+	}
+
+	if err := access.Bootstrap(db); err != nil {
+		return nil, fmt.Errorf("rbac bootstrap: %w", err)
 	}
 
 	f := fiber.New(fiber.Config{
@@ -138,6 +154,11 @@ func Build(cfg *config.Config) (*app.App, error) {
 	container.RegisterModule(deployments.NewModule())
 	container.RegisterModule(&proxy.Module{})
 	container.RegisterModule(&orchestrator.Module{})
+	container.RegisterModule(&users.Module{})
+	container.RegisterModule(&audit.Module{})
+	container.RegisterModule(&marketplace.Module{})
+	container.RegisterModule(&cluster.Module{})
+	container.RegisterModule(&agent.Module{})
 	if cfg.EnableFilesystem {
 		container.RegisterModule(&filesystem.Module{})
 	}
@@ -214,4 +235,9 @@ func mergeAllowedOrigins(cfg *config.Config) []string {
 	}
 
 	return origins
+}
+
+func embeddedDistReady() bool {
+	_, err := frontend.Dist.Open("dist/index.html")
+	return err == nil
 }

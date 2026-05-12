@@ -7,6 +7,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 
+	"skyport/internal/app"
 	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/validator"
@@ -23,6 +24,16 @@ import (
 // @Failure 400 {object} response.ErrorBody
 // @Failure 409 {object} response.ErrorBody
 // @Router /api/v1/auth/register [post]
+func setupHandler(a *app.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var n int64
+		if err := a.DB.Model(&models.User{}).Count(&n).Error; err != nil {
+			return err
+		}
+		return response.OK(c, fiber.Map{"needs_setup": n == 0})
+	}
+}
+
 func registerHandler(svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req RegisterRequest
@@ -31,6 +42,9 @@ func registerHandler(svc *Service) fiber.Handler {
 		}
 		out, err := svc.Register(req)
 		if err != nil {
+			if errors.Is(err, ErrRegistrationClosed) {
+				return response.Error(c, fiber.StatusForbidden, "registration_closed", "public registration is disabled")
+			}
 			return response.Error(c, fiber.StatusConflict, "email_already_exists", "email is already registered")
 		}
 		return response.JSON(c, fiber.StatusCreated, out)
@@ -54,10 +68,13 @@ func loginHandler(svc *Service) fiber.Handler {
 		if err := validator.ParseAndValidate(c, &req); err != nil {
 			return err
 		}
-		out, err := svc.Login(req)
+		out, err := svc.Login(req, c.IP(), c.Get("User-Agent"))
 		if err != nil {
 			if errors.Is(err, ErrInvalidCredentials) {
 				return response.Unauthorized(c, "invalid email or password")
+			}
+			if errors.Is(err, ErrAccountDisabled) {
+				return response.Error(c, fiber.StatusForbidden, "account_disabled", "account is disabled")
 			}
 			return err
 		}

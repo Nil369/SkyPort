@@ -74,12 +74,24 @@ definitions:
     type: object
   internal_auth.UserDTO:
     properties:
+      avatar_relative_path:
+        type: string
       email:
         type: string
+      enabled:
+        type: boolean
       id:
         type: integer
       name:
         type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      roles:
+        items:
+          type: string
+        type: array
     type: object
   internal_capabilities.Snapshot:
     properties:

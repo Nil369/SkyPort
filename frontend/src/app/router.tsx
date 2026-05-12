@@ -20,6 +20,13 @@ import { ProcessManagerPage } from "@/features/process-manager/pages/ProcessMana
 import { MetricsPage } from "@/features/metrics/pages/MetricsPage";
 import { DomainsPage } from "@/features/domains/pages/DomainsPage";
 import { SettingsPage } from "@/features/settings/pages/SettingsPage";
+import { PermissionGate } from "@/features/auth/components/PermissionGate";
+import { UsersPage } from "@/features/users/pages/UsersPage";
+import { AdminPage } from "@/features/admin/pages/AdminPage";
+import { ProfilePage } from "@/features/users/pages/ProfilePage";
+import { MarketplacePage } from "@/features/marketplace/pages/MarketplacePage";
+import { ServersPage } from "@/features/cluster/pages/ServersPage";
+import { PERMS } from "@/lib/permissions";
 
 import { RouteErrorBoundary } from "@/routes/RouteErrorBoundary";
 
@@ -57,6 +64,32 @@ export const router = createBrowserRouter([
       { path: "/metrics", element: <MetricsPage /> },
       { path: "/domains", element: <DomainsPage /> },
       { path: "/settings", element: <SettingsPage /> },
+      { path: "/profile", element: <ProfilePage /> },
+      { path: "/marketplace", element: <MarketplacePage /> },
+      {
+        path: "/team",
+        element: (
+          <PermissionGate need={PERMS.usersManage}>
+            <UsersPage />
+          </PermissionGate>
+        ),
+      },
+      {
+        path: "/admin",
+        element: (
+          <PermissionGate need={PERMS.usersManage}>
+            <AdminPage />
+          </PermissionGate>
+        ),
+      },
+      {
+        path: "/servers",
+        element: (
+          <PermissionGate need={PERMS.serversManage}>
+            <ServersPage />
+          </PermissionGate>
+        ),
+      },
     ],
   },
   {

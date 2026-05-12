@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useWebSocket } from "@/services/ws/useWebSocket";
+import { useAuthStore } from "@/stores/authStore";
 
 function statusDot(status: string) {
   switch (status) {
@@ -24,11 +25,14 @@ function statusDot(status: string) {
 }
 
 export function TopBar({ className }: { className?: string }) {
-  const { getStatus } = useWebSocket();
+  const { hub, getStatus } = useWebSocket();
+  const token = useAuthStore((s) => s.accessToken);
   const metricsWs = getStatus("metrics");
   const terminalWs = getStatus("terminal");
   const connected = metricsWs === "connected" || terminalWs === "connected";
-  const ws = connected ? "connected" : metricsWs;
+  const isConnected = metricsWs === "connected" || terminalWs === "connected";
+  const ws = isConnected ? "connected" : metricsWs;
+  const reconnectable = metricsWs === "disconnected" || metricsWs === "error" || metricsWs === "reconnecting";
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -101,8 +105,27 @@ export function TopBar({ className }: { className?: string }) {
           </div>
         </Card>
 
-        <Button variant="outline" size="icon" aria-label="Connection details" disabled>
-          <PlugZap className="size-4" />
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label={connected ? "Disconnect realtime" : "Reconnect realtime"}
+          title={connected ? "Disconnect realtime" : "Reconnect realtime"}
+          onClick={() => {
+            if (connected) {
+              hub.close("metrics");
+              return;
+            }
+            if (!token) return;
+            hub.connect("metrics", "/metrics", { token, parseJson: true });
+          }}
+          className={cn(
+            "transition-all",
+            connected && "border-emerald-400/50 text-emerald-500 shadow-[0_0_0_1px_rgba(16,185,129,0.25),0_0_16px_rgba(16,185,129,0.35)]",
+            reconnectable && "border-amber-400/50 text-amber-500",
+            !connected && !reconnectable && "text-muted-foreground"
+          )}
+        >
+          <PlugZap className={cn("size-4", connected && "animate-pulse")} />
         </Button>
 
         <ModeToggle />

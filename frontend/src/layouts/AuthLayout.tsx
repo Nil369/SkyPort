@@ -14,6 +14,19 @@ export function AuthLayout() {
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -top-24 left-1/2 h-64 w-136 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl sm:w-176 lg:w-208" />
         <div className="absolute -bottom-24 left-1/3 h-64 w-120 -translate-x-1/2 rounded-full bg-accent/10 blur-3xl sm:w-160 lg:w-3xl" />
+        {isSetup ? (
+          <>
+            <div
+              className="absolute right-0 h-80 w-80 rounded-full bg-cyan-500/5 blur-3xl motion-safe:animate-pulse sm:h-96 sm:w-96"
+              style={{ animationDuration: "5s", top: "15%" }}
+            />
+            <div
+              className="absolute -left-20 bottom-1/4 h-72 w-72 rounded-full bg-violet-500/5 blur-3xl motion-safe:animate-pulse"
+              style={{ animationDuration: "6s" }}
+            />
+            <div className="absolute inset-0 opacity-[0.35] bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-size-[32px_32px]" />
+          </>
+        ) : null}
       </div>
 
       <div className="absolute right-4 top-4 z-10">

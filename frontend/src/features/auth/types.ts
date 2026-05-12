@@ -2,6 +2,10 @@ export type User = {
   id: number;
   name: string;
   email: string;
+  enabled?: boolean;
+  avatar_relative_path?: string;
+  roles?: string[];
+  permissions?: string[];
 };
 
 export type AuthResponse = {
