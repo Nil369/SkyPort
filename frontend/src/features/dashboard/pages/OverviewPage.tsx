@@ -1,10 +1,14 @@
 import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { platformApi } from "@/features/platform/api";
 import { useWebSocket } from "@/services/ws/useWebSocket";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -27,6 +31,9 @@ function pushPoint(list: Point[], p: Point, limit = 48) {
 export function OverviewPage() {
   const token = useAuthStore((s) => s.accessToken);
   const { hub, getStatus } = useWebSocket();
+
+  const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects, staleTime: 15_000 });
+  const docker = useQuery({ queryKey: ["docker-status"], queryFn: platformApi.dockerStatus, staleTime: 30_000 });
 
   const [snap, setSnap] = React.useState<HostSnapshot | null>(null);
   const [cpu, setCpu] = React.useState<Point[]>([]);
@@ -132,10 +139,60 @@ export function OverviewPage() {
           <CardHeader>
             <CardTitle>Platform activity</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-sm text-muted-foreground">
-              Active deployments, docker status, and recent logs will appear here.
-            </div>
+          <CardContent className="space-y-4 text-sm">
+            <PlatformActivitySection
+              title="Projects"
+              loading={projects.isLoading}
+              empty="No projects yet. Create one under Projects."
+              action={<Link className="text-xs font-medium text-primary hover:underline" to="/projects">Open projects</Link>}
+            >
+              {(projects.data ?? []).length ? (
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  {(projects.data ?? [])
+                    .slice(0, 5)
+                    .map((p) => (
+                      <li key={p.id} className="flex justify-between gap-2">
+                        <span className="truncate font-mono text-foreground/90">{p.name}</span>
+                        <span className="shrink-0 text-[10px] uppercase text-muted-foreground/80">#{p.id}</span>
+                      </li>
+                    ))}
+                  {(projects.data ?? []).length > 5 ? (
+                    <li className="text-[11px] text-muted-foreground/80">+{(projects.data ?? []).length - 5} more</li>
+                  ) : null}
+                </ul>
+              ) : null}
+            </PlatformActivitySection>
+            
+            <PlatformActivitySection
+              title="Docker host"
+              loading={docker.isLoading}
+              empty="Docker status unavailable."
+              action={<Link className="text-xs font-medium text-primary hover:underline" to="/docker">Docker</Link>}
+            >
+              {docker.data ? (
+                <div className="grid gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Engine</span>
+                    <Badge variant={docker.data.installed ? "success" : "warning"} className="font-mono text-[10px]">
+                      {docker.data.installed ? "installed" : "not installed"}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>Daemon</span>
+                    <Badge variant={docker.data.daemon_running ? "success" : "default"} className="font-mono text-[10px]">
+                      {docker.data.daemon_running ? "running" : "stopped"}
+                    </Badge>
+                  </div>
+                  {docker.data.version ? (
+                    <div className="wrap-break-word font-mono text-[10px] text-foreground/80">{docker.data.version}</div>
+                  ) : null}
+                </div>
+              ) : null}
+            </PlatformActivitySection>
+
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Deployment logs stream from each deployment card (View logs). Process output is available under Process Manager.
+            </p>
           </CardContent>
         </Card>
 
@@ -149,16 +206,16 @@ export function OverviewPage() {
                   Launch partner
                 </div>
                 <h3 className="text-3xl font-semibold leading-tight">
-                  Build a bold developer ecosystem with {""}
+                Build modern developer infrastructure with {""}
                   <span className="font-bold text-blue-400">Akash Halder Technologia!</span>
                 </h3>
                 <p className="text-sm text-white/70">
-                  High‑impact product strategy, UI systems, and full‑stack execution for founder‑led teams.
+                From developer platforms to full-stack SaaS systems — designed for performance, reliability, and rapid iteration.
                 </p>
               </div>
               <div className="flex items-center justify-start lg:justify-end">
                 <a
-                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:translate-y-[-1px]"
+                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 transition hover:-translate-y-px"
                   href="https://www.akashhalder.in/"
                   target="_blank"
                   rel="noreferrer"
@@ -171,6 +228,36 @@ export function OverviewPage() {
         </section>
       </div>
     </PageShell>
+  );
+}
+
+function PlatformActivitySection({
+  title,
+  loading,
+  empty,
+  action,
+  children,
+}: {
+  title: string;
+  loading: boolean;
+  empty: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/10 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</div>
+        {action}
+      </div>
+      {loading ? (
+        <Skeleton className="h-12 w-full" />
+      ) : children ? (
+        children
+      ) : (
+        <div className="text-xs text-muted-foreground">{empty}</div>
+      )}
+    </div>
   );
 }
 

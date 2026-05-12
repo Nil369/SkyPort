@@ -54,14 +54,17 @@ export function AdminPage() {
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => navigate("/team")}>User management</Button>
             <Button size="sm" variant="outline" onClick={() => navigate("/marketplace")}>Marketplace</Button>
+            <Button size="sm" variant="outline" onClick={() => navigate("/servers")}>Cluster / VPS</Button>
+            <Button size="sm" variant="outline" onClick={() => navigate("/terminal")}>Terminal</Button>
             <Button size="sm" onClick={() => navigate("/settings")}>Settings</Button>
           </div>
         }
       />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-4">
         <SummaryCard title="User Management" icon={<Users className="size-4" />} value={`${users.data?.length ?? 0} users`} meta="invite, edit, enable/disable, reset password, delete" />
         <SummaryCard title="Marketplace" icon={<Store className="size-4" />} value={`${marketplace.data?.length ?? 0} apps`} meta="manifest-backed catalog" />
+        <SummaryCard title="VPS Manager" icon={<Server className="size-4" />} value={`${(system.data as any)?.hostname ?? "host"}`} meta="cluster nodes, remote agents, server onboarding" />
         <SummaryCard title="Server Health" icon={<Server className="size-4" />} value={String(system.data?.hostname ?? "-")} meta={`WS ${connected ? "online" : "reconnecting/offline"}`} />
       </div>
 

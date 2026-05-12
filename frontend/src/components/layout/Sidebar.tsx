@@ -161,7 +161,7 @@ export function Sidebar() {
               collapsed && "p-2"
             )}
           >
-            <div className={cn("flex items-start gap-3", collapsed && "justify-center")}>
+            <div className={cn("flex items-start gap-3 mt-2", collapsed && "justify-center")}>
               <div className="relative">
                 <div className="size-12 overflow-hidden rounded-full border border-white/15" style={avatarBgStyle}>
                   {avatarSrc ? (
@@ -183,7 +183,7 @@ export function Sidebar() {
                     <div className="truncate text-[11px] text-slate-300">{user?.email ?? "No email"}</div>
                   </div>
                 </div>
-                <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-blue-400">
+                <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 max-w-16 my-1 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
                     {role}
                 </div>
               </div>

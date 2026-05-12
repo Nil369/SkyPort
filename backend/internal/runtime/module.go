@@ -1,15 +1,12 @@
 package runtime
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
-	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -20,6 +17,7 @@ import (
 	"skyport/internal/runtime/installers"
 	"skyport/internal/security"
 	"skyport/internal/validator"
+	"skyport/internal/pm2"
 )
 
 type Module struct{}
@@ -33,11 +31,6 @@ func (m *Module) Register(a *app.App) error {
 	r.Post("/install", installHandler())
 	r.Post("/install/smart", smartInstallHandler(a))
 	r.Post("/pm2/startup", pm2StartupHandler())
-	r.Get("/pm2/list", pm2ListHandler())
-	r.Post("/pm2/:name/start", pm2ActionHandler("start"))
-	r.Post("/pm2/:name/stop", pm2ActionHandler("stop"))
-	r.Post("/pm2/:name/restart", pm2ActionHandler("restart"))
-	r.Delete("/pm2/:name", pm2ActionHandler("delete"))
 	return nil
 }
 
@@ -80,7 +73,7 @@ func detectHandler(a *app.App) fiber.Handler {
 //
 // Typical install: {"runtime":"node","dry_run":false,"execute":true}
 type installRequest struct {
-	Runtime string `json:"runtime" validate:"required,oneof=node bun python go php java pm2"`
+	Runtime string `json:"runtime" validate:"required,oneof=node bun deno python go php java pm2"`
 	DryRun  bool   `json:"dry_run"`
 	Execute bool   `json:"execute"`
 }
@@ -246,7 +239,11 @@ func pm2StartupHandler() fiber.Handler {
 		if home == "" {
 			home = strings.TrimSpace(os.Getenv("USERPROFILE"))
 		}
-		cmd := []string{"pm2", "startup", "systemd"}
+		bin, err := pm2.ResolveBinary()
+		if err != nil {
+			return response.Error(c, fiber.StatusBadRequest, "pm2_missing", "pm2 binary not found in PATH")
+		}
+		cmd := []string{bin, "startup", "systemd"}
 		if user != "" {
 			cmd = append(cmd, "-u", user)
 		}
@@ -270,54 +267,6 @@ func pm2StartupHandler() fiber.Handler {
 			"command":           commandStr,
 			"output":            output,
 		})
-	}
-}
-
-// @Summary PM2 list
-// @Tags Runtime
-// @Security BearerAuth
-// @Produce json
-// @Description Returns the current PM2 process list via pm2 jlist
-// @Success 200 {object} map[string]interface{}
-// @Failure 500 {object} response.ErrorBody
-// @Router /api/v1/runtime/pm2/list [get]
-func pm2ListHandler() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		if _, err := exec.LookPath("pm2"); err != nil {
-			return response.Error(c, fiber.StatusBadRequest, "pm2_missing", "pm2 binary not found in PATH")
-		}
-		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, "pm2", "jlist").Output()
-		if err != nil {
-			return response.Error(c, fiber.StatusInternalServerError, "pm2_list_failed", err.Error())
-		}
-		var list []map[string]any
-		if err := json.Unmarshal(out, &list); err != nil {
-			return response.Error(c, fiber.StatusInternalServerError, "pm2_list_failed", "invalid pm2 output")
-		}
-		return response.OK(c, fiber.Map{"processes": list})
-	}
-}
-
-func pm2ActionHandler(action string) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		name := c.Params("name")
-		if name == "" {
-			return response.BadRequest(c, "missing process name")
-		}
-		if _, err := exec.LookPath("pm2"); err != nil {
-			return response.Error(c, fiber.StatusBadRequest, "pm2_missing", "pm2 binary not found in PATH")
-		}
-
-		ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "pm2", action, name)
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return response.Error(c, fiber.StatusInternalServerError, "pm2_action_failed", strings.TrimSpace(string(out)))
-		}
-		return response.OK(c, fiber.Map{"status": "ok", "action": action, "process": name, "output": strings.TrimSpace(string(out))})
 	}
 }
 

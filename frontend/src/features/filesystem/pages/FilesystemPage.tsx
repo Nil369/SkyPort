@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { ArrowLeft, Folder, File, Upload, Download, ExternalLink } from "lucide-react";
+import { ArrowLeft, Folder, Upload, Download, ExternalLink } from "lucide-react";
+import { getFileIcon } from "@/lib/fileIcons";
 import * as XLSX from "xlsx";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -251,7 +252,7 @@ export function FilesystemPage() {
                           {item.is_dir ? (
                             <Folder className="size-4 fill-primary/30 text-primary" />
                           ) : (
-                            <File className="size-4 text-muted-foreground" />
+                            <span style={{ color: getFileIcon(item.name).color }}>{getFileIcon(item.name).icon}</span>
                           )}
                           <span className="truncate">{item.name}</span>
                         </button>
