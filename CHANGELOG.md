@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/Nil369/SkyPort/compare/v0.1.0...v0.2.0) (2026-05-12)
+
+
+### Features
+
+* **pm2:** implement PM2 service for process management and logging. The game changer feature for low-end VPS of 512MB ram constraint🔥 ([f281d51](https://github.com/Nil369/SkyPort/commit/f281d512d69f244897157ccb807be92e48478f5f))
+
 # [0.1.0](https://github.com/Nil369/SkyPort/compare/v0.0.2...v0.1.0) (2026-05-12)
 
 
