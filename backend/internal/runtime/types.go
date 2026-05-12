@@ -32,4 +32,11 @@ type DetectionResult struct {
 	StartCommand     string   `json:"start_command"`
 	Components       []Component `json:"components,omitempty"`
 	Notes            string   `json:"notes,omitempty"`
+	
+	// Additional metadata for PM2/native deployments
+	PackageManager   string   `json:"package_manager,omitempty"`   // npm, yarn, pnpm, bun, pip, etc
+	Framework        string   `json:"framework,omitempty"`         // Next.js, NestJS, Express, FastAPI, etc
+	DetectedPort     int      `json:"detected_port,omitempty"`     // From package.json or config
+	SuggestedAppName string   `json:"suggested_app_name,omitempty"` // For PM2 --name
 }
+

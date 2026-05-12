@@ -16,6 +16,8 @@ func PrimaryBinary(rt string) string {
 		return "node"
 	case "bun":
 		return "bun"
+	case "deno":
+		return "deno"
 	case "python":
 		return ""
 	case "go":
@@ -99,37 +101,5 @@ func Install(ctx context.Context, req Request) (Result, error) {
 }
 
 func commandsFor(rt string) []string {
-	apt := map[string]string{
-		"node":   "apt-get update && apt-get install -y --no-install-recommends nodejs npm",
-		"bun":    "curl -fsSL https://bun.sh/install | bash",
-		"python": "apt-get update && apt-get install -y --no-install-recommends python3 python3-pip",
-		"go":     "apt-get update && apt-get install -y --no-install-recommends golang",
-		"php":    "apt-get update && apt-get install -y --no-install-recommends php php-cli",
-		"java":   "apt-get update && apt-get install -y --no-install-recommends default-jre default-jdk",
-		"pm2":    "npm install -g pm2",
-	}
-	if runtime.GOOS == "linux" {
-		if c, ok := apt[rt]; ok {
-			return []string{c}
-		}
-		return nil
-	}
-	switch rt {
-	case "node":
-		return []string{"winget install OpenJS.NodeJS.LTS"}
-	case "pm2":
-		return []string{"npm install -g pm2"}
-	case "python":
-		return []string{"winget install Python.Python.3.12"}
-	case "go":
-		return []string{"winget install GoLang.Go"}
-	case "php":
-		return []string{"winget install PHP.PHP"}
-	case "java":
-		return []string{"winget install EclipseAdoptium.Temurin.21.JDK"}
-	case "bun":
-		return []string{"powershell -c \"irm bun.sh/install.ps1 | iex\""}
-	default:
-		return nil
-	}
+	return getInstallCommands(rt)
 }

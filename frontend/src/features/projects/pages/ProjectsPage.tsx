@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { platformApi } from "@/features/platform/api";
+import { parseEnvTextSimple } from "@/lib/envUtils";
+import { resolvedStartCommand, withNodeHintsIfApplicable } from "@/lib/runtimeHints";
 
 export function ProjectsPage() {
   const qc = useQueryClient();
@@ -28,6 +30,7 @@ export function ProjectsPage() {
   const [deployStartCmd, setDeployStartCmd] = React.useState("");
   const [deployWorkingDir, setDeployWorkingDir] = React.useState("");
   const [deployEnvText, setDeployEnvText] = React.useState("");
+  const autoFilledDeployProjectId = React.useRef<number | null>(null);
 
   const location = useLocation();
   const searchQuery = React.useMemo(() => new URLSearchParams(location.search).get("q")?.trim().toLowerCase() ?? "", [location.search]);
@@ -35,6 +38,20 @@ export function ProjectsPage() {
   const projects = useQuery({
     queryKey: ["projects"],
     queryFn: platformApi.listProjects,
+  });
+
+  const selectedDeployProject = React.useMemo(
+    () => projects.data?.find((project) => project.id === deployProjectId) ?? null,
+    [projects.data, deployProjectId],
+  );
+
+  const selectedDeployRuntime = useQuery({
+    queryKey: ["project-runtime", deployProjectId, selectedDeployProject?.path],
+    queryFn: async () => {
+      if (!selectedDeployProject?.path) return null;
+      return await platformApi.detectProjectRuntime(selectedDeployProject.path);
+    },
+    enabled: Boolean(selectedDeployProject?.path),
   });
 
   const [page, setPage] = React.useState(1);
@@ -66,6 +83,34 @@ export function ProjectsPage() {
       setPage(1);
     }
   }, [page, totalPages]);
+
+  React.useEffect(() => {
+    if (!deployProjectId || !selectedDeployRuntime.data) return;
+    if (autoFilledDeployProjectId.current === deployProjectId) return;
+
+    const detected = selectedDeployRuntime.data;
+    const hinted = withNodeHintsIfApplicable(detected);
+    const runtime = String(hinted.runtime ?? "").toLowerCase();
+    const framework = (detected.framework ?? "").toLowerCase();
+    const nodeLikeFrameworks = new Set(["next.js", "nestjs", "express", "vite", "react", "nuxt"]);
+    const preferPm2 = runtime === "node" || nodeLikeFrameworks.has(framework);
+
+    if (preferPm2) {
+      setDeployStrategy("pm2");
+    }
+    if (detected.detected_port) {
+      setDeployPort(String(detected.detected_port));
+    }
+    const start = resolvedStartCommand(detected);
+    if (start) {
+      setDeployStartCmd(start);
+    }
+    if (detected.working_directory) {
+      setDeployWorkingDir(detected.working_directory);
+    }
+
+    autoFilledDeployProjectId.current = deployProjectId;
+  }, [deployProjectId, selectedDeployRuntime.data]);
 
   const createProject = useMutation({
     mutationFn: platformApi.createProject,
@@ -99,6 +144,7 @@ export function ProjectsPage() {
       setDeployPort("");
       setDeployStartCmd("");
       setDeployWorkingDir("");
+      autoFilledDeployProjectId.current = null;
       qc.invalidateQueries({ queryKey: ["deployments"] });
     },
     onError: (err: any) => {
@@ -199,6 +245,16 @@ export function ProjectsPage() {
               <div className="mb-3 text-sm font-medium">
                 Deploy project: {projects.data?.find((p) => p.id === deployProjectId)?.name ?? ""}
               </div>
+              {selectedDeployRuntime.data ? (
+                <div className="mb-3 rounded-lg border border-border/70 bg-background/60 p-3 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="info">Runtime: {selectedDeployRuntime.data.runtime || "unknown"}</Badge>
+                    {selectedDeployRuntime.data.framework ? <Badge variant="info">Framework: {selectedDeployRuntime.data.framework}</Badge> : null}
+                    {selectedDeployRuntime.data.package_manager ? <Badge variant="info">PM: {selectedDeployRuntime.data.package_manager}</Badge> : null}
+                    {selectedDeployRuntime.data.detected_port ? <Badge variant="info">Port: {selectedDeployRuntime.data.detected_port}</Badge> : null}
+                  </div>
+                </div>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <select
                   className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
@@ -243,7 +299,7 @@ export function ProjectsPage() {
                       auto_start: true,
                       strategy: deployStrategy,
                       port: deployPort ? Number(deployPort) : undefined,
-                      env: parseEnvText(deployEnvText),
+                      env: parseEnvTextSimple(deployEnvText),
                       start_cmd: deployStartCmd.trim() || undefined,
                       working_directory: deployWorkingDir.trim() || undefined,
                     })
@@ -252,7 +308,14 @@ export function ProjectsPage() {
                 >
                   Deploy now
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setDeployProjectId(null)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setDeployProjectId(null);
+                    autoFilledDeployProjectId.current = null;
+                  }}
+                >
                   Cancel
                 </Button>
               </div>
@@ -327,21 +390,4 @@ export function ProjectsPage() {
       </Card>
     </PageShell>
   );
-}
-
-function parseEnvText(raw: string) {
-  const env: Record<string, string> = {};
-  raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .forEach((line) => {
-      const idx = line.indexOf("=");
-      if (idx <= 0) return;
-      const key = line.slice(0, idx).trim();
-      const value = line.slice(idx + 1);
-      if (!key) return;
-      env[key] = value;
-    });
-  return Object.keys(env).length ? env : undefined;
 }

@@ -31,6 +31,9 @@ export type DockerContainer = {
   ports: string;
   state: string;
   created: string;
+  mounts?: string;
+  networks?: string;
+  local_volumes?: string;
 };
 
 export type DockerImage = {
@@ -39,6 +42,25 @@ export type DockerImage = {
   tag: string;
   size: string;
   created: string;
+};
+
+export type DockerVolume = {
+  name: string;
+  driver: string;
+  scope?: string;
+  created_at?: string;
+  mountpoint?: string;
+  ref_count?: number;
+  size_bytes?: number;
+  in_use?: boolean;
+  attached_containers?: string;
+};
+
+export type DockerNetwork = {
+  id: string;
+  name: string;
+  driver: string;
+  scope?: string;
 };
 
 export type FsItem = {
@@ -73,13 +95,52 @@ export type RuntimeInstallResponse = {
   result?: RuntimeInstallResult;
 };
 
+export type RuntimeDetectionResult = {
+  runtime: string;
+  confidence: string;
+  matched_files: string[];
+  working_directory: string;
+  install_command: string;
+  build_command: string;
+  start_command: string;
+  components: Array<{ working_directory: string; kind: string; evidence: string }>;
+  notes: string;
+  package_manager?: string;
+  framework?: string;
+  detected_port?: number;
+  suggested_app_name?: string;
+};
+
 export type Pm2Process = {
-  name?: string;
-  pid?: number;
-  pm_id?: number;
-  status?: string;
-  pm2_env?: Record<string, any>;
-  monit?: Record<string, any>;
+  name: string;
+  pm_id: number;
+  pid: number;
+  status: string;
+  cpu: number;
+  memory_bytes: number;
+  uptime_sec: number;
+  restarts: number;
+  unstable_restarts: number;
+  exec_mode: string;
+  interpreter: string;
+  runtime_type: string;
+  script: string;
+  cwd: string;
+  env_port?: number;
+  ports?: number[];
+  namespace?: string;
+  framework?: string;
+  group_key?: string;
+};
+
+export type Pm2WsSnapshot = {
+  type: string;
+  reason?: string;
+  processes: Pm2Process[];
+  events?: Array<{ kind: string; name: string; prev_status?: string; next_status?: string; message?: string }>;
+  signature?: string;
+  collected_at_ms?: number;
+  pm2_binary?: string;
 };
 
 export type DomainMapping = {
@@ -183,6 +244,15 @@ export const platformApi = {
   deleteImage: async (name: string) => (await http.delete(`/docker/image/${encodeURIComponent(name)}`)).data,
   dockerDaemon: async (action: "start" | "stop" | "restart") => (await http.post("/docker/daemon", { action })).data,
 
+  listDockerVolumes: async () => (await http.get<{ volumes: DockerVolume[] }>("/docker/volumes")).data,
+  createDockerVolume: async (name: string, driver?: string) =>
+    (await http.post("/docker/volumes/create", { name, driver: driver || undefined })).data,
+  deleteDockerVolume: async (name: string) => (await http.delete(`/docker/volume/${encodeURIComponent(name)}`)).data,
+  pruneDockerVolumes: async () => (await http.post("/docker/volumes/prune")).data,
+
+  listDockerNetworks: async () => (await http.get<{ networks: DockerNetwork[] }>("/docker/networks")).data,
+  pruneDockerNetworks: async () => (await http.post("/docker/networks/prune")).data,
+
   systemInfo: async () => (await http.get<Record<string, unknown>>("/system/info")).data,
   gitStatus: async () => (await http.get<GitStatus>("/system/git/status")).data,
   gitInstall: async (execute: boolean) => (await http.post("/system/git/install", { execute })).data,
@@ -198,12 +268,22 @@ export const platformApi = {
 
   runtimeInstall: async (runtime: string, execute: boolean) =>
     (await http.post<RuntimeInstallResponse>("/runtime/install", { runtime, execute, dry_run: !execute })).data,
-  listPm2: async () => (await http.get<{ processes: Pm2Process[] }>("/runtime/pm2/list")).data,
+
+  detectProjectRuntime: async (projectPath: string) =>
+    (await http.post<RuntimeDetectionResult>("/runtime/detect", { project_path: projectPath })).data,
+  pm2HostStatus: async () => (await http.get<{ installed: boolean; binary?: string; native?: boolean }>("/pm2/status")).data,
+
+  listPm2Processes: async () => (await http.get<{ processes: Pm2Process[] }>("/pm2/processes")).data,
+
+  pm2Logs: async (name: string, lines = 200) =>
+    (await http.get<{ name: string; lines: number; log: string }>(`/pm2/processes/${encodeURIComponent(name)}/logs`, { params: { lines } })).data,
+
   pm2Action: async (name: string, action: "start" | "stop" | "restart" | "delete") => {
+    const enc = encodeURIComponent(name);
     if (action === "delete") {
-      return (await http.delete(`/runtime/pm2/${encodeURIComponent(name)}`)).data;
+      return (await http.delete(`/pm2/processes/${enc}`)).data;
     }
-    return (await http.post(`/runtime/pm2/${encodeURIComponent(name)}/${action}`)).data;
+    return (await http.post(`/pm2/processes/${enc}/${action}`)).data;
   },
 
   generateDomainProxy: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number }) =>

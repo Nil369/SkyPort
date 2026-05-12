@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"skyport/internal/pm2"
 )
 
 type StartRequest struct {
@@ -39,15 +41,17 @@ func (m *Manager) Start(ctx context.Context, req StartRequest, stdout, stderr io
 		return 0, errors.New("command is required")
 	}
 
-	// PM2 manager: use pm2 CLI to start/manage Node apps for zero-downtime reloads
+	// PM2 manager: host-native pm2 CLI (never inside Docker).
 	if req.Manager == "pm2" {
-		if _, err := exec.LookPath("pm2"); err != nil {
+		if _, err := pm2.ResolveBinary(); err != nil {
 			return 0, errors.New("pm2 binary not found in PATH")
 		}
-		// pm2 start --name <name> -- <cmd> <args...>
 		args := []string{"start", "--name", req.Name, "--", req.Command}
 		args = append(args, req.Args...)
-		cmd := exec.CommandContext(ctx, "pm2", args...)
+		cmd, err := pm2.Command(ctx, args...)
+		if err != nil {
+			return 0, err
+		}
 		cmd.Dir = req.Dir
 		cmd.Env = req.Env
 		cmd.Stdout = stdout
@@ -55,8 +59,14 @@ func (m *Manager) Start(ctx context.Context, req StartRequest, stdout, stderr io
 		if err := cmd.Run(); err != nil {
 			return 0, err
 		}
-		// Query pm2 for pid
-		out, err := exec.CommandContext(ctx, "pm2", "pid", req.Name).Output()
+		pidCmd, err := pm2.Command(ctx, "pid", req.Name)
+		if err != nil {
+			m.mu.Lock()
+			m.running[req.Name] = &RunningProcess{Cmd: nil, Pid: 0, Manager: "pm2"}
+			m.mu.Unlock()
+			return 0, nil
+		}
+		out, err := pidCmd.Output()
 		if err != nil {
 			// started but couldn't fetch pid; return success with pid 0
 			m.mu.Lock()
@@ -95,9 +105,13 @@ func (m *Manager) Stop(name string) error {
 		return nil
 	}
 	if p.Manager == "pm2" {
-		// stop + delete in pm2
-		_ = exec.Command("pm2", "stop", name).Run()
-		_ = exec.Command("pm2", "delete", name).Run()
+		ctx := context.Background()
+		if c1, err := pm2.Command(ctx, "stop", name); err == nil {
+			_ = c1.Run()
+		}
+		if c2, err := pm2.Command(ctx, "delete", name); err == nil {
+			_ = c2.Run()
+		}
 		m.mu.Lock()
 		delete(m.running, name)
 		m.mu.Unlock()
@@ -121,8 +135,11 @@ func (m *Manager) Health(name string) string {
 		return "stopped"
 	}
 	if p.Manager == "pm2" {
-		// ask pm2 for pid
-		out, err := exec.Command("pm2", "pid", name).Output()
+		pidCmd, err := pm2.Command(context.Background(), "pid", name)
+		if err != nil {
+			return "stopped"
+		}
+		out, err := pidCmd.Output()
 		if err != nil {
 			return "stopped"
 		}

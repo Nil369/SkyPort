@@ -10,9 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { platformApi } from "@/features/platform/api";
+import { resolvedStartCommand, withNodeHintsIfApplicable } from "@/lib/runtimeHints";
+import { useWebSocket } from "@/services/ws/useWebSocket";
+import { useAuthStore } from "@/stores/authStore";
 
 export function DeploymentsPage() {
   const qc = useQueryClient();
+  const { hub } = useWebSocket();
   const [projectId, setProjectId] = React.useState("");
   const [port, setPort] = React.useState("");
   const [startCmd, setStartCmd] = React.useState("");
@@ -20,12 +24,67 @@ export function DeploymentsPage() {
   const [workingDir, setWorkingDir] = React.useState("");
   const [envText, setEnvText] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [logsForId, setLogsForId] = React.useState<number | null>(null);
+  const deployAutofillKey = React.useRef<string>("");
 
   const location = useLocation();
   const searchQuery = React.useMemo(() => new URLSearchParams(location.search).get("q")?.trim().toLowerCase() ?? "", [location.search]);
 
   const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: platformApi.listDeployments });
+
+  const selectedProject = React.useMemo(
+    () => projects.data?.find((p) => String(p.id) === projectId) ?? null,
+    [projects.data, projectId],
+  );
+
+  const deployRuntime = useQuery({
+    queryKey: ["deployment-form-runtime", selectedProject?.path],
+    queryFn: () => platformApi.detectProjectRuntime(selectedProject!.path),
+    enabled: Boolean(selectedProject?.path),
+  });
+
+  React.useEffect(() => {
+    deployAutofillKey.current = "";
+  }, [projectId]);
+
+  React.useEffect(() => {
+    if (!projectId) return;
+    if (deployAutofillKey.current === projectId) return;
+    if (deployRuntime.isLoading) return;
+
+    if (deployRuntime.isError) {
+      setPort((p) => (p.trim() ? p : "3000"));
+      setStartCmd((s) => (s.trim() ? s : "npm start"));
+      deployAutofillKey.current = projectId;
+      return;
+    }
+
+    if (!deployRuntime.data) return;
+
+    const detected = deployRuntime.data;
+    const hinted = withNodeHintsIfApplicable(detected);
+    const runtime = String(hinted.runtime ?? "").toLowerCase();
+    const framework = (detected.framework ?? "").toLowerCase();
+    const nodeLikeFrameworks = new Set(["next.js", "nestjs", "express", "vite", "react", "nuxt"]);
+    const preferPm2 = runtime === "node" || nodeLikeFrameworks.has(framework);
+
+    if (preferPm2) {
+      setStrategy("pm2");
+    }
+    if (detected.detected_port) {
+      setPort(String(detected.detected_port));
+    }
+    const start = resolvedStartCommand(detected);
+    if (start) {
+      setStartCmd(start);
+    }
+    if (detected.working_directory) {
+      setWorkingDir(detected.working_directory);
+    }
+
+    deployAutofillKey.current = projectId;
+  }, [projectId, deployRuntime.data, deployRuntime.isLoading, deployRuntime.isError]);
 
   const filteredDeployments = React.useMemo(() => {
     const items = deployments.data ?? [];
@@ -93,7 +152,14 @@ export function DeploymentsPage() {
           <select
             className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
             value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setProjectId(next);
+              setPort("");
+              setStartCmd("");
+              setWorkingDir("");
+              setStrategy("docker");
+            }}
           >
             <option value="">Select project</option>
             {(projects.data ?? []).map((p) => (
@@ -112,7 +178,11 @@ export function DeploymentsPage() {
             <option value="native">Native</option>
           </select>
           <Input placeholder="Port (optional)" value={port} onChange={(e) => setPort(e.target.value)} />
-          <Input placeholder="Start command (optional)" value={startCmd} onChange={(e) => setStartCmd(e.target.value)} />
+          <Input
+            placeholder="Start command (auto-detected when empty)"
+            value={startCmd}
+            onChange={(e) => setStartCmd(e.target.value)}
+          />
           <Input placeholder="Working directory (optional)" value={workingDir} onChange={(e) => setWorkingDir(e.target.value)} />
           <textarea
             className="min-h-24 w-full rounded-lg border border-input bg-background p-3 text-sm sm:col-span-2 lg:col-span-5"
@@ -189,7 +259,10 @@ export function DeploymentsPage() {
                       Error: <span className="font-mono text-foreground/80">{d.error || "-"}</span>
                     </li>
                   </ul>
-                  <div className="mt-3 flex items-center justify-end gap-2">
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => setLogsForId(d.id)}>
+                      View logs
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -231,7 +304,73 @@ export function DeploymentsPage() {
           </div>
         ) : null}
       </Card>
+
+      {logsForId != null ? (
+        <DeploymentLogsModal deploymentId={logsForId} hub={hub} onClose={() => setLogsForId(null)} />
+      ) : null}
     </PageShell>
+  );
+}
+
+function DeploymentLogsModal({
+  deploymentId,
+  hub,
+  onClose,
+}: {
+  deploymentId: number;
+  hub: ReturnType<typeof useWebSocket>["hub"];
+  onClose: () => void;
+}) {
+  const token = useAuthStore((s) => s.accessToken);
+  const [text, setText] = React.useState<string>("");
+  const preRef = React.useRef<HTMLPreElement>(null);
+
+  React.useEffect(() => {
+    if (!token) return;
+    const key = `deployment-logs-${deploymentId}`;
+    setText("");
+    hub.connect(key, `/deployments/${deploymentId}/logs`, { token, parseJson: false, reconnect: true });
+    const off = hub.subscribe<unknown>(key, (msg) => {
+      const line = typeof msg === "string" ? msg : msg != null ? String(msg) : "";
+      if (!line) return;
+      setText((prev) => `${prev}${line}`.slice(-200_000));
+    });
+    return () => {
+      off();
+      hub.close(key);
+    };
+  }, [hub, token, deploymentId]);
+
+  React.useEffect(() => {
+    const el = preRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [text]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <Card className="max-h-[85vh] w-full max-w-3xl overflow-hidden border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b border-border/60 py-3">
+          <CardTitle className="text-base">Deployment logs · #{deploymentId}</CardTitle>
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <pre
+            ref={preRef}
+            className="max-h-[65vh] overflow-auto whitespace-pre-wrap wrap-break-word bg-muted/30 p-4 font-mono text-[11px] leading-relaxed text-foreground"
+          >
+            {text || "Connecting…"}
+          </pre>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

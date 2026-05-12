@@ -1,6 +1,6 @@
 import * as React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { File, Folder, FolderOpen, ChevronRight, ArrowLeft, Upload, Download, ExternalLink } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, ArrowLeft, Upload, Download, ExternalLink } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -10,27 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ResizablePanels } from "@/components/layout/ResizablePanels";
 import { CodeEditor } from "@/components/editor/CodeEditor";
+import { CodeExplorerTree } from "@/features/code-editor/components/CodeExplorerTree";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
 
 export function CodeEditorPage() {
+  const qc = useQueryClient();
   const token = useAuthStore((s) => s.accessToken);
   const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects });
   const [projectPath, setProjectPath] = React.useState("");
   const [selectedPath, setSelectedPath] = React.useState("");
   const [code, setCode] = React.useState("");
-  const [currentPath, setCurrentPath] = React.useState("");
+  const [explorerRoot, setExplorerRoot] = React.useState("");
+  const [activeDirPath, setActiveDirPath] = React.useState("");
   const [customPath, setCustomPath] = React.useState("");
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [savedCode, setSavedCode] = React.useState("");
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
-
-  const listing = useQuery({
-    queryKey: ["code-editor-files", currentPath],
-    queryFn: () => platformApi.listFiles(currentPath),
-    enabled: !!currentPath,
-  });
 
   const readFile = useMutation({
     mutationFn: platformApi.readFile,
@@ -59,7 +56,7 @@ export function CodeEditorPage() {
     },
     onSuccess: (count) => {
       toast.success(`${count} file${count === 1 ? "" : "s"} uploaded`);
-      listing.refetch();
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
     },
     onError: () => toast.error("Upload failed"),
   });
@@ -93,7 +90,8 @@ export function CodeEditorPage() {
             onChange={(e) => {
               const next = e.target.value;
               setProjectPath(next);
-              setCurrentPath(next);
+              setExplorerRoot(next);
+              setActiveDirPath(next);
               setCustomPath(next);
               setSelectedPath("");
               setPreviewUrl("");
@@ -119,7 +117,8 @@ export function CodeEditorPage() {
             onClick={() => {
               const p = customPath.trim();
               if (!p) return;
-              setCurrentPath(p);
+              setExplorerRoot(p);
+              setActiveDirPath(p);
               setSelectedPath("");
               setPreviewUrl("");
               setCode("");
@@ -128,7 +127,7 @@ export function CodeEditorPage() {
           >
             Open custom path
           </Button>
-          <Button variant="outline" onClick={() => listing.refetch()} disabled={!currentPath}>
+          <Button variant="outline" onClick={() => void qc.invalidateQueries({ queryKey: ["code-editor-files"] })} disabled={!explorerRoot}>
             Refresh
           </Button>
           <input
@@ -138,12 +137,12 @@ export function CodeEditorPage() {
             multiple
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);
-              if (!files.length || !currentPath) return;
-              uploadFiles.mutate({ path: currentPath, files });
+              if (!files.length || !activeDirPath) return;
+              uploadFiles.mutate({ path: activeDirPath, files });
               e.currentTarget.value = "";
             }}
           />
-          <Button variant="outline" onClick={() => uploadInputRef.current?.click()} disabled={!currentPath || uploadFiles.isPending}>
+          <Button variant="outline" onClick={() => uploadInputRef.current?.click()} disabled={!activeDirPath || uploadFiles.isPending}>
             <Upload className="size-4" />
             Upload
           </Button>
@@ -168,55 +167,44 @@ export function CodeEditorPage() {
                 <div className="h-full overflow-auto border-r border-border/60 p-2">
                   <div className="mb-2 flex items-center gap-1 rounded-md border border-border/70 p-2 text-xs text-muted-foreground">
                     <button
+                      type="button"
                       className="rounded px-1 py-0.5 hover:bg-muted"
                       onClick={() => {
-                        const normalized = currentPath.replace(/\\/g, "/");
-                        const i = normalized.lastIndexOf("/");
-                        const parent = i > 0 ? normalized.slice(0, i) : normalized.includes(":") ? normalized.split("/")[0] + "/" : "/";
-                        const next = parent || "/";
-                        setCurrentPath(next);
+                        const next = parentFsPath(explorerRoot);
+                        if (!next || next === explorerRoot) return;
+                        setExplorerRoot(next);
+                        setActiveDirPath(next);
                         setCustomPath(next);
                       }}
-                      disabled={!currentPath}
+                      disabled={!explorerRoot}
                     >
-                      ..
+                      Up
                     </button>
-                    <ChevronRight className="size-3" />
-                    <span className="truncate">{currentPath || projectPath || "No folder selected"}</span>
+                    <ChevronRight className="size-3 shrink-0" />
+                    <span className="truncate font-mono" title={activeDirPath || explorerRoot}>
+                      {activeDirPath || explorerRoot || projectPath || "No folder selected"}
+                    </span>
                   </div>
-                  {(listing.data?.items ?? []).map((item) => (
-                    <button
-                      key={item.path}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                      onClick={() => {
-                        if (item.is_dir) {
-                          setCurrentPath(item.path);
-                          setCustomPath(item.path);
-                          return;
-                        }
-                        setSelectedPath(item.path);
-                        if (isPreviewable(item.path)) {
-                          setPreviewUrl(buildPreviewUrl(item.path, token));
-                          setCode("");
-                          setSavedCode("");
-                          return;
-                        }
-                        setPreviewUrl("");
-                        readFile.mutate(item.path);
-                      }}
-                    >
-                      {item.is_dir ? (
-                        currentPath === item.path ? (
-                          <FolderOpen className="size-4 fill-primary/30 text-primary" />
-                        ) : (
-                          <Folder className="size-4 fill-primary/30 text-primary" />
-                        )
-                      ) : (
-                        <File className="size-4 text-muted-foreground" />
-                      )}
-                      <span className="truncate">{item.name}</span>
-                    </button>
-                  ))}
+                  <CodeExplorerTree
+                    rootPath={explorerRoot}
+                    depth={0}
+                    activeDirPath={activeDirPath}
+                    onOpenDirectory={(path) => {
+                      setActiveDirPath(path);
+                      setCustomPath(path);
+                    }}
+                    onOpenFile={(item) => {
+                      setSelectedPath(item.path);
+                      if (isPreviewable(item.path)) {
+                        setPreviewUrl(buildPreviewUrl(item.path, token));
+                        setCode("");
+                        setSavedCode("");
+                        return;
+                      }
+                      setPreviewUrl("");
+                      readFile.mutate(item.path);
+                    }}
+                  />
                 </div>
               }
               right={
@@ -290,6 +278,19 @@ export function CodeEditorPage() {
       </Card>
     </PageShell>
   );
+}
+
+function parentFsPath(p: string): string {
+  const normalized = p.replace(/\\/g, "/");
+  const i = normalized.lastIndexOf("/");
+  if (i > 0) {
+    return normalized.slice(0, i);
+  }
+  if (normalized.includes(":")) {
+    const head = normalized.split("/")[0];
+    return head ? `${head}/` : normalized;
+  }
+  return "/";
 }
 
 function isPreviewable(path: string) {

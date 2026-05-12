@@ -2316,38 +2316,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/runtime/pm2/list": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Returns the current PM2 process list via pm2 jlist",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Runtime"
-                ],
-                "summary": "PM2 list",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/skyport_internal_response.ErrorBody"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/runtime/pm2/startup": {
             "post": {
                 "security": [
@@ -2610,6 +2578,15 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 128,
                     "minLength": 8
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "owner",
+                        "admin",
+                        "developer",
+                        "viewer"
+                    ]
                 }
             }
         },

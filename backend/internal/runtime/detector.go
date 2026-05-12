@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sort"
@@ -125,32 +126,20 @@ func (d *Detector) Detect(projectPath string) (DetectionResult, error) {
 		return out, nil
 	}
 
-	// 2) Dockerfile (shallowest wins)
-	if ds := byName["Dockerfile"]; len(ds) > 0 {
-		best := shallowest(ds)
-		out.Runtime = Docker
-		out.Confidence = "high"
-		out.WorkingDirectory = best.Dir
-		img := "skyport-app"
-		out.InstallCommand = "docker build -t " + img + " ."
-		out.StartCommand = "docker run --rm -p 3000:3000 " + img
-		out.Notes = "Commands assume build context is the directory containing the Dockerfile; deployment uses working_directory as build context."
-		return out, nil
-	}
-
-	// 3) Bun
+	// 2) Bun
 	if bs := byName["bun.lockb"]; len(bs) > 0 {
 		best := shallowest(bs)
 		out.Runtime = Bun
 		out.Confidence = "high"
 		out.WorkingDirectory = parentDirOfFile(best.Dir)
+		out.PackageManager = "bun"
 		out.InstallCommand = "bun install"
 		out.StartCommand = "bun run start"
 		out.Notes = monorepoNote(byName["package.json"])
 		return out, nil
 	}
 
-	// 4) Node — pick best package.json (server/api over client/web, then shallow)
+	// 5) Node — pick best package.json (server/api over client/web, then shallow)
 	if js := byName["package.json"]; len(js) > 0 {
 		best := pickNodePackageDir(js)
 		out.Runtime = Node
@@ -160,10 +149,39 @@ func (d *Detector) Detect(projectPath string) (DetectionResult, error) {
 		} else {
 			out.Confidence = "high"
 		}
-		out.InstallCommand = "npm install"
-		out.BuildCommand = "npm run build"
-		out.StartCommand = "npm run start"
+		
+		// Detect package manager from lock files
+		pm := detectPackageManagerForNode(projectPath, best)
+		out.PackageManager = pm
+		switch pm {
+		case "yarn":
+			out.InstallCommand = "yarn install"
+			out.StartCommand = "yarn start"
+		case "pnpm":
+			out.InstallCommand = "pnpm install"
+			out.StartCommand = "pnpm start"
+		default: // npm
+			out.InstallCommand = "npm install"
+			out.StartCommand = "npm start"
+		}
+		
+		// Detect framework and refine start command
+		detectNodeFrameworkAndPort(projectPath, best, &out)
+		
 		out.Notes = monorepoNote(js)
+		return out, nil
+	}
+
+	// Dockerfile after Node/Bun so repos with both still classify as the app runtime (PM2/native need real start commands).
+	if ds := byName["Dockerfile"]; len(ds) > 0 {
+		best := shallowest(ds)
+		out.Runtime = Docker
+		out.Confidence = "high"
+		out.WorkingDirectory = best.Dir
+		img := "skyport-app"
+		out.InstallCommand = "docker build -t " + img + " ."
+		out.StartCommand = "docker run --rm -p 3000:3000 " + img
+		out.Notes = "Commands assume build context is the directory containing the Dockerfile; deployment uses working_directory as build context."
 		return out, nil
 	}
 
@@ -343,4 +361,177 @@ func buildComponents(hits []markerHit) []Component {
 		}
 	}
 	return out
+}
+
+// detectPackageManagerForNode checks for lock files in order of preference: pnpm-lock, yarn.lock, package-lock
+func detectPackageManagerForNode(projectPath, workDir string) string {
+	checkFile := func(name string) bool {
+		path := filepath.Join(projectPath, workDir, name)
+		_, err := os.Stat(path)
+		return err == nil
+	}
+	
+	if checkFile("pnpm-lock.yaml") {
+		return "pnpm"
+	}
+	if checkFile("yarn.lock") {
+		return "yarn"
+	}
+	if checkFile("package-lock.json") {
+		return "npm"
+	}
+	if checkFile("bun.lockb") {
+		return "bun"
+	}
+	return "npm" // default
+}
+
+// detectNodeFrameworkAndPort analyzes package.json to detect framework and infer port/start command
+func detectNodeFrameworkAndPort(projectPath, workDir string, out *DetectionResult) {
+	pkgPath := filepath.Join(projectPath, workDir, "package.json")
+	pkgData, err := os.ReadFile(pkgPath)
+	if err != nil {
+		return
+	}
+	
+	var pkg map[string]any
+	if err := json.Unmarshal(pkgData, &pkg); err != nil {
+		return
+	}
+	
+	// Check dependencies for framework hints
+	deps := make(map[string]bool)
+	if d, ok := pkg["dependencies"].(map[string]any); ok {
+		for k := range d {
+			deps[k] = true
+		}
+	}
+	if d, ok := pkg["devDependencies"].(map[string]any); ok {
+		for k := range d {
+			deps[k] = true
+		}
+	}
+	
+	// Detect framework
+	if deps["next"] {
+		out.Framework = "Next.js"
+		if scripts, ok := pkg["scripts"].(map[string]any); ok && scripts["build"] != nil {
+			out.BuildCommand = "npm run build"
+		}
+		out.StartCommand = "npm run start"
+	} else if deps["nuxt"] {
+		out.Framework = "Nuxt"
+		if scripts, ok := pkg["scripts"].(map[string]any); ok && scripts["build"] != nil {
+			out.BuildCommand = "npm run build"
+		}
+		out.StartCommand = "npm run start"
+	} else if deps["@nestjs/core"] || deps["@nestjs/common"] {
+		out.Framework = "NestJS"
+		if scripts, ok := pkg["scripts"].(map[string]any); ok && scripts["start:prod"] != nil {
+			out.StartCommand = "npm run start:prod"
+		}
+	} else if deps["express"] {
+		out.Framework = "Express"
+		// Check for common entry points
+		if scripts, ok := pkg["scripts"].(map[string]any); ok {
+			if _, ok := scripts["start"]; ok {
+				out.StartCommand = "npm start"
+			} else if _, ok := scripts["dev"]; ok {
+				out.StartCommand = "npm run dev"
+			}
+		}
+	} else if deps["vite"] {
+		out.Framework = "Vite"
+		out.StartCommand = "npm run dev"
+	} else if deps["react"] && !deps["next"] {
+		out.Framework = "React"
+		if scripts, ok := pkg["scripts"].(map[string]any); ok && scripts["build"] != nil {
+			out.BuildCommand = "npm run build"
+		}
+		out.StartCommand = "npm run dev"
+	}
+	
+	// Final check for generic build script if not already set by framework
+	if out.BuildCommand == "" {
+		if scripts, ok := pkg["scripts"].(map[string]any); ok && scripts["build"] != nil {
+			// If it's a Node project, we only assume 'npm run build' is REQUIRED if it's TypeScript (tsconfig.json)
+			// or if it's a known heavy framework. For plain JS, we prefer to skip it to avoid "Missing script" errors.
+			isTS := hasAnyFile(projectPath, filepath.Join(workDir, "tsconfig.json"))
+			
+			if isTS || out.Framework != "" {
+				pm := out.PackageManager
+				if pm == "" {
+					pm = "npm"
+				}
+				switch pm {
+				case "yarn":
+					out.BuildCommand = "yarn build"
+				case "pnpm":
+					out.BuildCommand = "pnpm build"
+				default:
+					out.BuildCommand = "npm run build"
+				}
+			}
+		}
+	}
+	
+	// Try to infer port from scripts or common env vars
+	if scripts, ok := pkg["scripts"].(map[string]any); ok {
+		if start, ok := scripts["start"].(string); ok {
+			// Look for port patterns: 3000, :3000, PORT=3000, etc
+			ports := parsePortsFromString(start)
+			if len(ports) > 0 {
+				out.DetectedPort = ports[0]
+			}
+		}
+	}
+	
+	// Default detected port
+	if out.DetectedPort == 0 {
+		out.DetectedPort = 3000
+	}
+}
+
+// parsePortsFromString extracts port numbers from command strings
+func parsePortsFromString(s string) []int {
+	var ports []int
+	words := strings.Fields(s)
+	for i, w := range words {
+		// Check for PORT=XXXX pattern
+		if strings.HasPrefix(w, "PORT=") {
+			if port := parsePort(strings.TrimPrefix(w, "PORT=")); port > 0 {
+				ports = append(ports, port)
+			}
+		}
+		// Check for :XXXX pattern
+		if strings.HasPrefix(w, ":") {
+			if port := parsePort(strings.TrimPrefix(w, ":")); port > 0 {
+				ports = append(ports, port)
+			}
+		}
+		// Check for --port XXXX pattern
+		if w == "--port" && i+1 < len(words) {
+			if port := parsePort(words[i+1]); port > 0 {
+				ports = append(ports, port)
+			}
+		}
+	}
+	return ports
+}
+
+func parsePort(s string) int {
+	p, err := strconv.Atoi(strings.TrimSpace(s))
+	if err == nil && p > 0 && p < 65536 {
+		return p
+	}
+	return 0
+}
+
+func hasAnyFile(projectPath string, names ...string) bool {
+	for _, name := range names {
+		if _, err := os.Stat(filepath.Join(projectPath, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }

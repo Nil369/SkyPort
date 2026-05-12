@@ -44,6 +44,7 @@ import (
 	"skyport/internal/marketplace"
 	"skyport/internal/metrics"
 	"skyport/internal/orchestrator"
+	"skyport/internal/pm2"
 	"skyport/internal/projects"
 	"skyport/internal/proxy"
 	"skyport/internal/runtime"
@@ -150,6 +151,7 @@ func Build(cfg *config.Config) (*app.App, error) {
 	}
 	container.RegisterModule(&system.Module{})
 	container.RegisterModule(&capabilities.Module{})
+	container.RegisterModule(pm2.NewModule())
 	container.RegisterModule(&runtime.Module{})
 	container.RegisterModule(deployments.NewModule())
 	container.RegisterModule(&proxy.Module{})

@@ -49,6 +49,13 @@ definitions:
         maxLength: 128
         minLength: 8
         type: string
+      role:
+        enum:
+        - owner
+        - admin
+        - developer
+        - viewer
+        type: string
     required:
     - email
     - name
@@ -2244,26 +2251,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Smart runtime install
-      tags:
-      - Runtime
-  /api/v1/runtime/pm2/list:
-    get:
-      description: Returns the current PM2 process list via pm2 jlist
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/skyport_internal_response.ErrorBody'
-      security:
-      - BearerAuth: []
-      summary: PM2 list
       tags:
       - Runtime
   /api/v1/runtime/pm2/startup:

@@ -8,6 +8,9 @@ const (
 
 	PermDockerManage = "docker.manage"
 
+	// PermPm2Manage covers native host PM2 discovery, process control, logs, and /ws/pm2.
+	PermPm2Manage = "pm2.manage"
+
 	PermTerminalAccess = "terminal.access"
 	PermMetricsView    = "metrics.view"
 
@@ -23,8 +26,8 @@ const (
 
 // RoleName constants align with database seed values.
 const (
-	RoleOwner      = "owner"
-	RoleAdmin      = "admin"
-	RoleDeveloper  = "developer"
-	RoleViewer     = "viewer"
+	RoleOwner     = "owner"
+	RoleAdmin     = "admin"
+	RoleDeveloper = "developer"
+	RoleViewer    = "viewer"
 )

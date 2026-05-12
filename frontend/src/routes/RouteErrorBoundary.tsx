@@ -30,6 +30,7 @@ export function RouteErrorBoundary({ notFound }: Props) {
     <div className="min-h-dvh bg-background text-foreground grid place-items-center p-6">
       <Card className="w-full max-w-md p-6">
         <div className="space-y-2">
+          <img src={"/logo.png"} alt="SkyPort" className="w-10 h-10" />
           <div className="text-sm text-muted-foreground">SkyPort</div>
           <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground">{message}</p>

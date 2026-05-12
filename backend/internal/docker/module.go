@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,8 +38,11 @@ func (m *Module) Register(a *app.App) error {
 	a.Fiber.Post("/api/v1/docker/image/:name/run", imageRunHandler())
 	a.Fiber.Post("/api/v1/docker/images/prune", imagesPruneHandler())
 	a.Fiber.Get("/api/v1/docker/volumes", listVolumesHandler())
+	a.Fiber.Post("/api/v1/docker/volumes/create", volumeCreateHandler())
 	a.Fiber.Delete("/api/v1/docker/volume/:name", volumeDeleteHandler())
 	a.Fiber.Post("/api/v1/docker/volumes/prune", volumesPruneHandler())
+	a.Fiber.Get("/api/v1/docker/networks", listNetworksHandler())
+	a.Fiber.Post("/api/v1/docker/networks/prune", networksPruneHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/start", containerStartHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/stop", containerStopHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/restart", containerRestartHandler())
@@ -375,14 +379,17 @@ func dockerDaemonHandler() fiber.Handler {
 
 // containerInfo represents Docker container information
 type containerInfo struct {
-	ID      string `json:"id"`
-	Names   string `json:"names"`
-	Image   string `json:"image"`
-	Status  string `json:"status"`
-	Ports   string `json:"ports"`
-	State   string `json:"state"`
-	Created string `json:"created"`
-	Context string `json:"context,omitempty"`
+	ID            string `json:"id"`
+	Names         string `json:"names"`
+	Image         string `json:"image"`
+	Status        string `json:"status"`
+	Ports         string `json:"ports"`
+	State         string `json:"state"`
+	Created       string `json:"created"`
+	Context       string `json:"context,omitempty"`
+	Mounts        string `json:"mounts,omitempty"`
+	Networks      string `json:"networks,omitempty"`
+	LocalVolumes  string `json:"local_volumes,omitempty"`
 }
 
 type commitRequest struct {
@@ -457,19 +464,22 @@ func parseDockerContainers(output []byte, ctxName string) []containerInfo {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		var data map[string]string
+		var data map[string]any
 		if err := json.Unmarshal([]byte(line), &data); err != nil {
 			continue
 		}
 		containers = append(containers, containerInfo{
-			ID:      data["ID"],
-			Names:   data["Names"],
-			Image:   data["Image"],
-			Status:  data["Status"],
-			Ports:   data["Ports"],
-			State:   data["State"],
-			Created: data["CreatedAt"],
-			Context: ctxName,
+			ID:           stringField(data["ID"]),
+			Names:        stringField(data["Names"]),
+			Image:        stringField(data["Image"]),
+			Status:       stringField(data["Status"]),
+			Ports:        stringField(data["Ports"]),
+			State:        stringField(data["State"]),
+			Created:      stringField(data["CreatedAt"]),
+			Context:      ctxName,
+			Mounts:       stringField(data["Mounts"]),
+			Networks:     stringField(data["Networks"]),
+			LocalVolumes: stringField(data["LocalVolumes"]),
 		})
 	}
 	return containers
@@ -799,9 +809,15 @@ func imagesPruneHandler() fiber.Handler {
 }
 
 type volumeInfo struct {
-	Name   string `json:"name"`
-	Driver string `json:"driver"`
-	Scope  string `json:"scope"`
+	Name         string `json:"name"`
+	Driver       string `json:"driver"`
+	Scope        string `json:"scope"`
+	CreatedAt    string `json:"created_at,omitempty"`
+	Mountpoint   string `json:"mountpoint,omitempty"`
+	RefCount     int    `json:"ref_count"`
+	SizeBytes    int64  `json:"size_bytes,omitempty"`
+	InUse        bool   `json:"in_use"`
+	AttachedHint string `json:"attached_containers,omitempty"`
 }
 
 // listVolumesHandler lists docker volumes.
@@ -813,13 +829,14 @@ type volumeInfo struct {
 // @Router /api/v1/docker/volumes [get]
 func listVolumesHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(c.UserContext(), 8*time.Second)
 		defer cancel()
 		output, err := runDocker(ctx, "volume", "ls", "--format", "{{json .}}")
 		if err != nil {
 			return response.Error(c, fiber.StatusServiceUnavailable, "volumes_list_failed", err.Error())
 		}
 		volumes := make([]volumeInfo, 0)
+		names := make([]string, 0)
 		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 			if strings.TrimSpace(line) == "" {
 				continue
@@ -828,9 +845,29 @@ func listVolumesHandler() fiber.Handler {
 			if json.Unmarshal([]byte(line), &data) != nil {
 				continue
 			}
+			n := strings.TrimSpace(data["Name"])
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
 			volumes = append(volumes, volumeInfo{
-				Name: data["Name"], Driver: data["Driver"], Scope: data["Scope"],
+				Name:   n,
+				Driver: data["Driver"],
+				Scope:  data["Scope"],
 			})
+		}
+		details := volumeInspectMap(ctx, names)
+		for i := range volumes {
+			if d, ok := details[volumes[i].Name]; ok {
+				volumes[i].CreatedAt = d.CreatedAt
+				volumes[i].Mountpoint = d.Mountpoint
+				volumes[i].RefCount = d.RefCount
+				volumes[i].SizeBytes = d.SizeBytes
+				volumes[i].InUse = d.RefCount > 0
+				if d.RefCount > 0 {
+					volumes[i].AttachedHint = fmt.Sprintf("%d container(s)", d.RefCount)
+				}
+			}
 		}
 		return response.OK(c, fiber.Map{"volumes": volumes})
 	}
@@ -872,5 +909,180 @@ func volumesPruneHandler() fiber.Handler {
 			return response.Error(c, fiber.StatusInternalServerError, "volumes_prune_failed", err.Error())
 		}
 		return response.OK(c, fiber.Map{"status": "volumes pruned", "output": strings.TrimSpace(string(out))})
+	}
+}
+
+type volumeCreateBody struct {
+	Name   string `json:"name"`
+	Driver string `json:"driver"`
+}
+
+func volumeCreateHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var body volumeCreateBody
+		if err := c.BodyParser(&body); err != nil {
+			return response.BadRequest(c, "invalid request body")
+		}
+		name := strings.TrimSpace(body.Name)
+		if name == "" {
+			return response.BadRequest(c, "volume name is required")
+		}
+		ctx, cancel := context.WithTimeout(c.UserContext(), 15*time.Second)
+		defer cancel()
+		args := []string{"volume", "create"}
+		if d := strings.TrimSpace(body.Driver); d != "" {
+			args = append(args, "--driver", d)
+		}
+		args = append(args, name)
+		out, err := runDocker(ctx, args...)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "volume_create_failed", err.Error())
+		}
+		created := strings.TrimSpace(string(out))
+		if created == "" {
+			created = name
+		}
+		return response.OK(c, fiber.Map{"status": "volume created", "volume": created})
+	}
+}
+
+type networkInfo struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Driver string `json:"driver"`
+	Scope  string `json:"scope"`
+}
+
+func listNetworksHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.UserContext(), 8*time.Second)
+		defer cancel()
+		output, err := runDocker(ctx, "network", "ls", "--format", "{{json .}}")
+		if err != nil {
+			return response.Error(c, fiber.StatusServiceUnavailable, "networks_list_failed", err.Error())
+		}
+		nets := make([]networkInfo, 0)
+		for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			var data map[string]any
+			if json.Unmarshal([]byte(line), &data) != nil {
+				continue
+			}
+			n := strings.TrimSpace(stringField(data["Name"]))
+			if n == "host" || n == "none" {
+				continue
+			}
+			nets = append(nets, networkInfo{
+				ID:     stringField(data["ID"]),
+				Name:   n,
+				Driver: stringField(data["Driver"]),
+				Scope:  stringField(data["Scope"]),
+			})
+		}
+		return response.OK(c, fiber.Map{"networks": nets})
+	}
+}
+
+func networksPruneHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.UserContext(), 20*time.Second)
+		defer cancel()
+		out, err := runDocker(ctx, "network", "prune", "-f")
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "networks_prune_failed", err.Error())
+		}
+		return response.OK(c, fiber.Map{"status": "networks pruned", "output": strings.TrimSpace(string(out))})
+	}
+}
+
+type volInspect struct {
+	CreatedAt   string
+	Mountpoint  string
+	RefCount    int
+	SizeBytes   int64
+}
+
+func volumeInspectMap(ctx context.Context, names []string) map[string]volInspect {
+	out := map[string]volInspect{}
+	if len(names) == 0 {
+		return out
+	}
+	const batch = 40
+	for i := 0; i < len(names); i += batch {
+		end := i + batch
+		if end > len(names) {
+			end = len(names)
+		}
+		chunk := names[i:end]
+		args := append([]string{"volume", "inspect"}, chunk...)
+		raw, err := runDocker(ctx, args...)
+		if err != nil {
+			continue
+		}
+		var arr []map[string]any
+		if json.Unmarshal(raw, &arr) != nil {
+			continue
+		}
+		for _, item := range arr {
+			n := strings.TrimSpace(stringField(item["Name"]))
+			if n == "" {
+				continue
+			}
+			vi := volInspect{
+				CreatedAt:  stringField(item["CreatedAt"]),
+				Mountpoint: stringField(item["Mountpoint"]),
+			}
+			if ud, ok := item["UsageData"].(map[string]any); ok {
+				vi.RefCount = intFromAny(ud["RefCount"])
+				vi.SizeBytes = int64FromAny(ud["Size"])
+			}
+			out[n] = vi
+		}
+	}
+	return out
+}
+
+func stringField(v any) string {
+	switch t := v.(type) {
+	case string:
+		return strings.TrimSpace(t)
+	case float64:
+		return fmt.Sprintf("%.0f", t)
+	case bool:
+		if t {
+			return "true"
+		}
+		return "false"
+	case nil:
+		return ""
+	default:
+		return strings.TrimSpace(fmt.Sprint(t))
+	}
+}
+
+func intFromAny(v any) int {
+	switch t := v.(type) {
+	case float64:
+		return int(t)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(t))
+		return n
+	default:
+		return 0
+	}
+}
+
+func int64FromAny(v any) int64 {
+	switch t := v.(type) {
+	case float64:
+		return int64(t)
+	case string:
+		n, _ := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+		return n
+	default:
+		return 0
 	}
 }

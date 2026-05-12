@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Download, ExternalLink, ImagePlus, Play, Square, Trash2 } from "lucide-react";
+import { Download, ExternalLink, ImagePlus, Layers, Network, Play, Square, Trash2 } from "lucide-react";
 import { useLocation } from "react-router";
 import toast from "react-hot-toast";
 
@@ -16,6 +16,17 @@ export function DockerPage() {
   const status = useQuery({ queryKey: ["docker-status"], queryFn: platformApi.dockerStatus });
   const containers = useQuery({ queryKey: ["docker-containers"], queryFn: platformApi.listContainers });
   const images = useQuery({ queryKey: ["docker-images"], queryFn: platformApi.listImages });
+  const volumes = useQuery({
+    queryKey: ["docker-volumes"],
+    queryFn: platformApi.listDockerVolumes,
+    enabled: Boolean(status.data?.daemon_running),
+  });
+  const networks = useQuery({
+    queryKey: ["docker-networks"],
+    queryFn: platformApi.listDockerNetworks,
+    enabled: Boolean(status.data?.daemon_running),
+  });
+  const [dockerTab, setDockerTab] = React.useState<"containers" | "images" | "volumes" | "networks">("containers");
   const [installNote, setInstallNote] = React.useState<string | null>(null);
   const [installError, setInstallError] = React.useState<string | null>(null);
   const daemon = useMutation({ mutationFn: platformApi.dockerDaemon, onSuccess: () => status.refetch() });
@@ -72,6 +83,42 @@ export function DockerPage() {
     onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Run image failed"),
   });
 
+  const deleteVolume = useMutation({
+    mutationFn: platformApi.deleteDockerVolume,
+    onSuccess: () => {
+      toast.success("Volume removed");
+      volumes.refetch();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Volume delete failed"),
+  });
+
+  const createVolume = useMutation({
+    mutationFn: ({ name, driver }: { name: string; driver?: string }) => platformApi.createDockerVolume(name, driver),
+    onSuccess: () => {
+      toast.success("Volume created");
+      volumes.refetch();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Volume create failed"),
+  });
+
+  const pruneVolumes = useMutation({
+    mutationFn: platformApi.pruneDockerVolumes,
+    onSuccess: () => {
+      toast.success("Unused volumes pruned");
+      volumes.refetch();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Prune failed"),
+  });
+
+  const pruneNetworks = useMutation({
+    mutationFn: platformApi.pruneDockerNetworks,
+    onSuccess: () => {
+      toast.success("Unused networks pruned");
+      networks.refetch();
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Network prune failed"),
+  });
+
   const location = useLocation();
   const searchQuery = new URLSearchParams(location.search).get("q")?.trim().toLowerCase() ?? "";
   const filteredContainers = (containers.data?.containers ?? []).filter((c) => {
@@ -86,6 +133,16 @@ export function DockerPage() {
     const repo = String(img.repository ?? "").toLowerCase();
     const tag = String(img.tag ?? "").toLowerCase();
     return repo.includes(searchQuery) || tag.includes(searchQuery);
+  });
+  const filteredVolumes = (volumes.data?.volumes ?? []).filter((v) => {
+    if (!searchQuery) return true;
+    const blob = `${v.name} ${v.driver} ${v.mountpoint ?? ""} ${v.attached_containers ?? ""}`.toLowerCase();
+    return blob.includes(searchQuery);
+  });
+  const filteredNetworks = (networks.data?.networks ?? []).filter((n) => {
+    if (!searchQuery) return true;
+    const blob = `${n.name} ${n.driver} ${n.id}`.toLowerCase();
+    return blob.includes(searchQuery);
   });
 
   const openDockerInstallDocs = async () => {
@@ -102,7 +159,29 @@ export function DockerPage() {
 
   return (
     <PageShell>
-      <PageHeader title="Docker" subtitle="Containers, images, volumes, and warnings" />
+      <PageHeader title="Docker" subtitle="Engine, containers, images, named volumes, and bridge networks" />
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { id: "containers" as const, label: "Containers", icon: Square },
+            { id: "images" as const, label: "Images", icon: ImagePlus },
+            { id: "volumes" as const, label: "Volumes", icon: Layers },
+            { id: "networks" as const, label: "Networks", icon: Network },
+          ] as const
+        ).map(({ id, label, icon: Icon }) => (
+          <Button
+            key={id}
+            size="sm"
+            variant={dockerTab === id ? "default" : "outline"}
+            className="gap-2 font-mono text-xs"
+            onClick={() => setDockerTab(id)}
+          >
+            <Icon className="size-3.5" />
+            {label}
+          </Button>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
@@ -152,6 +231,7 @@ export function DockerPage() {
         ) : null}
       </Card>
 
+      {dockerTab === "containers" ? (
       <Card>
         <CardHeader>
           <CardTitle>Containers</CardTitle>
@@ -164,6 +244,8 @@ export function DockerPage() {
                 <TableHead>Image</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Ports</TableHead>
+                <TableHead className="max-w-[140px]">Mounts</TableHead>
+                <TableHead className="max-w-[120px]">Networks</TableHead>
                 <TableHead>URL</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -182,6 +264,12 @@ export function DockerPage() {
                     <TableCell>{c.image || "-"}</TableCell>
                     <TableCell>{statusText}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.ports || "-"}</TableCell>
+                    <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground" title={c.mounts || ""}>
+                      {c.mounts || "—"}
+                    </TableCell>
+                    <TableCell className="max-w-[120px] truncate text-xs text-muted-foreground" title={c.networks || ""}>
+                      {c.networks || "—"}
+                    </TableCell>
                     <TableCell className="text-xs">
                       {url ? (
                         <a className="text-primary hover:underline" href={url} target="_blank" rel="noreferrer">
@@ -254,7 +342,7 @@ export function DockerPage() {
               })}
               {!filteredContainers.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={8} className="text-muted-foreground">
                     No containers found.
                   </TableCell>
                 </TableRow>
@@ -263,7 +351,7 @@ export function DockerPage() {
           </Table>
         </CardContent>
       </Card>
-
+      ) : dockerTab === "images" ? (
       <Card>
         <CardHeader>
           <CardTitle>Images</CardTitle>
@@ -329,6 +417,117 @@ export function DockerPage() {
           </Table>
         </CardContent>
       </Card>
+      ) : dockerTab === "volumes" ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="font-mono text-base">Named volumes</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const n = window.prompt("New volume name", "skyport-data");
+                  if (!n?.trim()) return;
+                  createVolume.mutate({ name: n.trim() });
+                }}
+              >
+                Create volume
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => pruneVolumes.mutate()} disabled={pruneVolumes.isPending}>
+                Prune unused
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead className="text-right">Size</TableHead>
+                  <TableHead>Attached</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredVolumes.map((v) => (
+                  <TableRow key={v.name}>
+                    <TableCell className="font-mono text-xs">{v.name}</TableCell>
+                    <TableCell>{v.driver || "—"}</TableCell>
+                    <TableCell className="text-right font-mono text-xs">
+                      {v.size_bytes ? formatVolBytes(v.size_bytes) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {v.attached_containers || (v.in_use ? "in use" : "unused")}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{v.created_at || "—"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        aria-label="Delete volume"
+                        disabled={Boolean(v.in_use)}
+                        onClick={() => {
+                          if (!window.confirm(`Delete volume ${v.name}?`)) return;
+                          deleteVolume.mutate(v.name);
+                        }}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!filteredVolumes.length ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      {status.data?.daemon_running ? "No volumes match this filter." : "Start the Docker daemon to inspect volumes."}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : dockerTab === "networks" ? (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 border-b border-border/60 bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="font-mono text-base">Networks</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => pruneNetworks.mutate()} disabled={pruneNetworks.isPending}>
+              Prune unused
+            </Button>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Driver</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead className="font-mono text-xs">ID</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredNetworks.map((n) => (
+                  <TableRow key={n.id}>
+                    <TableCell className="font-mono text-xs">{n.name}</TableCell>
+                    <TableCell>{n.driver}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{n.scope || "—"}</TableCell>
+                    <TableCell className="max-w-[180px] truncate font-mono text-[10px] text-muted-foreground">{n.id}</TableCell>
+                  </TableRow>
+                ))}
+                {!filteredNetworks.length ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground">
+                      {status.data?.daemon_running ? "No networks match this filter." : "Start the Docker daemon to list networks."}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
     </PageShell>
   );
 }
@@ -339,4 +538,16 @@ function parseDockerHostPort(ports: string) {
   if (!match) return 0;
   const port = Number(match[1]);
   return Number.isFinite(port) ? port : 0;
+}
+
+function formatVolBytes(n: number) {
+  if (n <= 0) return "0 B";
+  const u = ["B", "KB", "MB", "GB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v.toFixed(1)} ${u[i]}`;
 }

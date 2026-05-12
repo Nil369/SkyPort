@@ -5,12 +5,14 @@ import (
 	"html"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"skyport/internal/app"
 	"skyport/internal/apps"
 	"skyport/internal/auth"
+	"skyport/internal/models"
 	"skyport/internal/response"
 )
 
@@ -34,7 +36,73 @@ func (m *Module) Register(a *app.App) error {
 	r.Get("/apps", func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"apps": catalog()})
 	})
+	r.Get("/installs", listInstalls(a))
+	r.Post("/installs", recordInstall(a))
 	return nil
+}
+
+func listInstalls(a *app.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var rows []models.MarketplaceInstall
+		if err := a.DB.Order("updated_at desc").Limit(200).Find(&rows).Error; err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "marketplace_installs_list_failed", err.Error())
+		}
+		out := make([]fiber.Map, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, fiber.Map{
+				"id":           row.ID,
+				"app_slug":     row.AppSlug,
+				"install_mode": row.InstallMode,
+				"status":       row.Status,
+				"notes":        row.Notes,
+				"created_at":   row.CreatedAt.UTC().Format(time.RFC3339),
+				"updated_at":   row.UpdatedAt.UTC().Format(time.RFC3339),
+			})
+		}
+		return response.OK(c, fiber.Map{"installs": out})
+	}
+}
+
+type recordInstallBody struct {
+	AppSlug     string `json:"app_slug"`
+	InstallMode string `json:"install_mode"`
+	Status      string `json:"status"`
+	Notes       string `json:"notes"`
+}
+
+func recordInstall(a *app.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var body recordInstallBody
+		if err := c.BodyParser(&body); err != nil {
+			return response.BadRequest(c, "invalid request body")
+		}
+		slug := strings.TrimSpace(body.AppSlug)
+		mode := strings.ToLower(strings.TrimSpace(body.InstallMode))
+		if slug == "" || (mode != "native" && mode != "docker") {
+			return response.BadRequest(c, "app_slug and install_mode (native|docker) are required")
+		}
+		status := strings.TrimSpace(body.Status)
+		if status == "" {
+			status = "recorded"
+		}
+		row := models.MarketplaceInstall{
+			AppSlug:     slug,
+			InstallMode: mode,
+			Status:      status,
+			Notes:       strings.TrimSpace(body.Notes),
+		}
+		if err := a.DB.Create(&row).Error; err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "marketplace_install_record_failed", err.Error())
+		}
+		return response.JSON(c, fiber.StatusCreated, fiber.Map{
+			"id":           row.ID,
+			"app_slug":     row.AppSlug,
+			"install_mode": row.InstallMode,
+			"status":       row.Status,
+			"notes":        row.Notes,
+			"created_at":   row.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
 }
 
 func catalog() []apps.Manifest {
