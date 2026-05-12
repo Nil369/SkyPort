@@ -2642,14 +2642,32 @@ const docTemplate = `{
         "internal_auth.UserDTO": {
             "type": "object",
             "properties": {
+                "avatar_relative_path": {
+                    "type": "string"
+                },
                 "email": {
                     "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
                 },
                 "id": {
                     "type": "integer"
                 },
                 "name": {
                     "type": "string"
+                },
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },

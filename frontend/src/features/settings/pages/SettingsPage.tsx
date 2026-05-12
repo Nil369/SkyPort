@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -10,8 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuthStore } from "@/stores/authStore";
 import { platformApi } from "@/features/platform/api";
+import { PERMS, can } from "@/lib/permissions";
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const info = useQuery({ queryKey: ["system-info"], queryFn: platformApi.systemInfo });
   const gitStatus = useQuery({ queryKey: ["git-status"], queryFn: platformApi.gitStatus });
@@ -191,6 +194,20 @@ export function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {can(user?.permissions, PERMS.usersManage) ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Admin panel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm text-muted-foreground">Access the admin user management panel to invite, edit, reset, and remove operators.</div>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" onClick={() => navigate("/admin")}>Open admin panel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
     </PageShell>
   );
 }

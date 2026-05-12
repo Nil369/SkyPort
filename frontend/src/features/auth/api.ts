@@ -19,7 +19,7 @@ export const authApi = {
     const { data } = await http.post<AuthResponseWire | AuthResponse>("/auth/login", input);
     return mapAuthResponse(data);
   },
-  async register(input: { name: string; email: string; password: string }): Promise<AuthResponse> {
+  async register(input: { name: string; email: string; password: string; role?: string }): Promise<AuthResponse> {
     const { data } = await http.post<AuthResponseWire | AuthResponse>("/auth/register", input);
     return mapAuthResponse(data);
   },

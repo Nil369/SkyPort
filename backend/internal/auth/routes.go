@@ -7,8 +7,9 @@ import (
 )
 
 func Mount(a *app.App, r fiber.Router) {
-	svc := NewService(a.DB, a.Config.JWTSecret, a.Config.JWTExpires)
+	svc := NewService(a.DB, a.Config)
 	authGroup := r.Group("/auth")
+	authGroup.Get("/setup", setupHandler(a))
 	authGroup.Post("/register", registerHandler(svc))
 	authGroup.Post("/login", loginHandler(svc))
 	authGroup.Post("/logout", RequireJWT(a.Config.JWTSecret), logoutHandler(svc))

@@ -11,7 +11,11 @@ $ErrorActionPreference = "Stop"
 
 # This script lives in backend/scripts; module root is one level up.
 $BackendRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$RepoRoot = Resolve-Path (Join-Path $BackendRoot "..")
 Set-Location $BackendRoot
+
+$WindowsIcon = Join-Path $RepoRoot "assets\logo.ico"
+$ResourceSyso = Join-Path $BackendRoot "cmd\server\resource.syso"
 
 if ($env:SYNC_FRONTEND -eq "1") {
   $RepoRoot = Resolve-Path (Join-Path $BackendRoot "..")
@@ -70,8 +74,15 @@ foreach ($t in $targets) {
     $env:GOARCH = $t.GOARCH
     $outFile = Join-Path $outDir "skyport$($t.Ext)"
     Write-Host "Building $($t.GOOS)/$($t.GOARCH) -> $outFile"
+    if ($t.GOOS -eq "windows" -and (Test-Path $WindowsIcon)) {
+      Write-Host "  Windows icon embed: $WindowsIcon -> resource.syso"
+      go run github.com/akavel/rsrc@v0.10.2 -ico $WindowsIcon -o $ResourceSyso
+    } else {
+      Remove-Item $ResourceSyso -ErrorAction SilentlyContinue
+    }
     go build -trimpath -ldflags $LdFlags -o $outFile ./cmd/server
   } finally {
+    Remove-Item $ResourceSyso -ErrorAction SilentlyContinue
     Remove-Item Env:\GOOS -ErrorAction SilentlyContinue
     Remove-Item Env:\GOARCH -ErrorAction SilentlyContinue
   }

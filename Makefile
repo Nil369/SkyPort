@@ -19,7 +19,7 @@ else
   FRONTEND_NPM_PREP := npm install
 endif
 
-.PHONY: help frontend-build frontend-sync cross-compile backend-build build-all release
+.PHONY: help frontend-build frontend-sync cross-compile backend-build build-all release branding-icon
 
 help:
 	@echo "Targets:"
@@ -29,6 +29,15 @@ help:
 	@echo "  backend-build    - native Go binary for this machine"
 	@echo "  build-all        - frontend-build then cross-compile"
 	@echo "  release          - same as build-all"
+	@echo "  branding-icon    - create assets/logo.ico placeholder (Windows) if missing"
+
+# Optional: ensure Windows .exe icon source exists before cross-compile.
+branding-icon:
+ifeq ($(OS),Windows_NT)
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/branding/create-placeholder-icon.ps1
+else
+	@echo "On non-Windows, add assets/logo.ico manually or run create-placeholder-icon.ps1 on Windows."
+endif
 
 # 1) npm  2) vite build  3) copy dist for go:embed + backend/web/dist mirror
 frontend-build:

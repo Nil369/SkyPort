@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/websocket/v2"
 
+	"skyport/internal/access"
 	"skyport/internal/app"
 	"skyport/internal/auth"
 	"skyport/internal/response"
@@ -61,8 +62,14 @@ func registerWebSocket(a *app.App) {
 			if token == "" {
 				return c.SendStatus(fiber.StatusUnauthorized)
 			}
-			if _, err := auth.ParseAccessToken(token, a.Config.JWTSecret); err != nil {
+			claims, err := auth.ParseAccessToken(token, a.Config.JWTSecret)
+			if err != nil {
 				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			svc := access.NewService(a.DB)
+			ok, err := svc.UserHasPermission(claims.UserID, access.PermMetricsView)
+			if err != nil || !ok {
+				return c.SendStatus(fiber.StatusForbidden)
 			}
 		}
 		return c.Next()

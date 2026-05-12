@@ -4,6 +4,7 @@ type RegisterRequest struct {
 	Name     string `json:"name" validate:"required,min=2,max=120"`
 	Email    string `json:"email" validate:"required,email,max=255"`
 	Password string `json:"password" validate:"required,min=8,max=128"`
+	Role     string `json:"role" validate:"omitempty,oneof=owner admin developer viewer"`
 }
 
 type LoginRequest struct {
@@ -12,9 +13,13 @@ type LoginRequest struct {
 }
 
 type UserDTO struct {
-	ID    uint   `json:"id"`
-	Name  string `json:"name"`
-	Email string `json:"email"`
+	ID                 uint     `json:"id"`
+	Name               string   `json:"name"`
+	Email              string   `json:"email"`
+	Enabled            bool     `json:"enabled"`
+	AvatarRelativePath string   `json:"avatar_relative_path,omitempty"`
+	Roles              []string `json:"roles,omitempty"`
+	Permissions        []string `json:"permissions,omitempty"`
 }
 
 type CredentialsDTO struct {

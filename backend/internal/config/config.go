@@ -37,6 +37,10 @@ type Config struct {
 	EnableProjects   bool
 	// MetricsDiskPath is optional: gopsutil disk.Usage path (e.g. / or C:\). Empty = OS default.
 	MetricsDiskPath string
+
+	// OpenRegistration allows POST /auth/register when at least one user already exists.
+	// Disable in production to enforce invite-only onboarding.
+	OpenRegistration bool
 }
 
 // Load reads .env when present (local dev), then environment variables.
@@ -78,6 +82,7 @@ func Load() (*Config, error) {
 		EnableFilesystem: getBoolEnv("ENABLE_FILESYSTEM", true),
 		EnableProjects:   getBoolEnv("ENABLE_PROJECTS", true),
 		MetricsDiskPath:  getEnv("SKYPORT_METRICS_DISK_PATH", ""),
+		OpenRegistration: getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
 	}
 
 	if err := cfg.validate(); err != nil {

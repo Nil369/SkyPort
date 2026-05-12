@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=SkyPort
+Comment=Lightweight self-hosted developer cloud OS
+Exec=skyport
+Terminal=true
+Categories=Development;Network;
+Icon=skyport

@@ -17,6 +17,7 @@ import (
 	gws "github.com/gofiber/websocket/v2"
 	"github.com/google/uuid"
 
+	"skyport/internal/access"
 	"skyport/internal/app"
 	"skyport/internal/auth"
 	wsinfra "skyport/internal/websocket"
@@ -48,10 +49,15 @@ func (m *Module) Register(a *app.App) error {
 				return c.SendStatus(fiber.StatusUnauthorized)
 			}
 
-			// Validate token
-			if _, err := auth.ParseAccessToken(token, a.Config.JWTSecret); err != nil {
+			claims, err := auth.ParseAccessToken(token, a.Config.JWTSecret)
+			if err != nil {
 				c.Set("X-Auth-Failed", "true")
 				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			svc := access.NewService(a.DB)
+			ok, err := svc.UserHasPermission(claims.UserID, access.PermTerminalAccess)
+			if err != nil || !ok {
+				return c.SendStatus(fiber.StatusForbidden)
 			}
 		}
 		return c.Next()

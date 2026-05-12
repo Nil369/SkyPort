@@ -8,6 +8,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 import { authApi } from "@/features/auth/api";
 import { PasswordStrength } from "@/features/auth/components/PasswordStrength";
 import { registerSchema, type RegisterValues } from "@/features/auth/schemas";
@@ -19,6 +20,7 @@ export function SetupWizardPage() {
 
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [role, setRole] = React.useState<"owner" | "admin">("admin");
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -27,7 +29,7 @@ export function SetupWizardPage() {
 
   const onSubmit = form.handleSubmit(async ({ confirmPassword, ...values }) => {
     try {
-      const res = await authApi.register(values);
+      const res = await authApi.register({ ...values, role });
       setSession({ accessToken: res.accessToken, user: res.user });
       toast.success("Admin created");
       navigate("/overview", { replace: true });
@@ -62,6 +64,19 @@ export function SetupWizardPage() {
           {form.formState.errors.email ? (
             <div className="text-xs text-destructive">{form.formState.errors.email.message}</div>
           ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="role">Role</Label>
+          <select
+            id="role"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={role}
+            onChange={(e) => setRole(e.target.value as "owner" | "admin")}
+          >
+            <option value="admin">Admin</option>
+            <option value="owner">Owner</option>
+          </select>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -126,6 +141,19 @@ export function SetupWizardPage() {
 
       <div className="text-xs text-muted-foreground text-center">
         Setup is safe to rerun if no users exist.
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {[
+          { t: "Realtime", d: "WebSocket metrics + terminals" },
+          { t: "Single binary", d: "SQLite + embedded UI" },
+          { t: "RBAC", d: "Owner / admin / dev / viewer" },
+        ].map((x) => (
+          <Card key={x.t} className="border-border/70 bg-muted/20 p-3 text-left shadow-none">
+            <div className="font-mono text-[11px] font-semibold text-primary">{x.t}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{x.d}</div>
+          </Card>
+        ))}
       </div>
 
       <div className="text-xs text-muted-foreground text-center">

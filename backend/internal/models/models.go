@@ -15,6 +15,17 @@ import (
 func All() []any {
 	return []any{
 		&User{},
+		&Role{},
+		&Permission{},
+		&RolePermission{},
+		&UserRole{},
+		&UserActivityLog{},
+		&LoginHistory{},
+		&InviteToken{},
+		&ClusterServer{},
+		&AgentRecord{},
+		&AgentToken{},
+		&MarketplaceInstall{},
 		&Project{},
 		&Deployment{},
 		&Runtime{},
@@ -38,6 +49,11 @@ type User struct {
 	GitAuthType    string `gorm:"size:16"`
 	GitPAT         string `gorm:"size:4096"`
 	GitSSHKey      string `gorm:"size:4096"`
+
+	Enabled              bool   `gorm:"not null;default:true"`
+	AvatarRelativePath   string `gorm:"size:512"` // relative to workspace root, e.g. users/12/avatar.png
+	PasswordResetToken   string `gorm:"size:128"`
+	PasswordResetExpires *time.Time
 }
 
 // Project stores project metadata and managed path.

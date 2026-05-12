@@ -149,9 +149,11 @@ dist/
 !backend/internal/frontend/dist/**
 build/
 bin/
+backend/cmd/server/resource.syso
 release/
 reference/
 /*reference/
-assets/
+assets/*
+!assets/logo.ico
 artifacts/
 stop

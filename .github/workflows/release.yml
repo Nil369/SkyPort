@@ -35,6 +35,12 @@ jobs:
       - name: Build frontend
         run: make frontend-build FRONTEND_USE_CI=1
 
+      - name: Ensure branding icon (optional)
+        run: |
+          if [ ! -f assets/logo.ico ]; then
+            echo "No assets/logo.ico — Windows builds will omit embedded icon."
+          fi
+
       - name: Regenerate Swagger
         working-directory: backend
         run: make swag-init
@@ -52,6 +58,8 @@ jobs:
           cp bin/darwin-amd64/skyport bin/skyport-darwin-amd64
           cp bin/darwin-arm64/skyport bin/skyport-darwin-arm64
           cp bin/windows-amd64/skyport.exe bin/skyport-windows-amd64.exe
+          cp packaging/skyport.desktop bin/skyport.desktop
+          cp packaging/Info.plist.template bin/SkyPort-Info.plist.template
 
       - name: Semantic Release
         env:
@@ -67,3 +75,5 @@ jobs:
             bin/skyport-darwin-amd64
             bin/skyport-darwin-arm64
             bin/skyport-windows-amd64.exe
+            bin/skyport.desktop
+            bin/SkyPort-Info.plist.template

@@ -35,6 +35,7 @@ func BuildTestApp(t *testing.T) *app.App {
 		EnableDocker:     false,
 		EnableFilesystem: true,
 		EnableProjects:   true,
+		OpenRegistration: true,
 	}
 	app, err := bootstrap.Build(cfg)
 	if err != nil {

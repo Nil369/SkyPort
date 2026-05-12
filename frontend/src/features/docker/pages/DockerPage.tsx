@@ -132,6 +132,10 @@ export function DockerPage() {
             Install Docker
           </Button>
         </CardContent>
+        <CardContent className="pt-0">
+          <div className="rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-600">
+            <strong className="font-extrabold">NOTE:</strong> Docker and container features work best on hosts with sufficient memory. Make sure your VPS has at least <strong>2GB RAM</strong> available before using Docker features.          </div>
+        </CardContent>
         {installNote || installError ? (
           <CardContent className="pt-0">
             {installNote ? (

@@ -1,4 +1,5 @@
 
+import * as React from "react";
 import { NavLink, useNavigate } from "react-router";
 import {
   Activity,
@@ -14,8 +15,13 @@ import {
   ChevronRight,
   Code2,
   LogOut,
-  UserCircle2,
   Cpu,
+  Store,
+  Users,
+  Server,
+  ShieldCheck,
+  EllipsisVertical,
+  Layers3,
 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -27,19 +33,25 @@ import { Separator } from "@/components/ui/separator";
 import { useUIStore } from "@/stores/uiStore";
 import { useAuthStore } from "@/stores/authStore";
 import { authApi } from "@/features/auth/api";
+import { PERMS, can } from "@/lib/permissions";
+import { env } from "@/app/env";
 
-const items = [
+type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; need?: string };
+
+const items: NavItem[] = [
   { to: "/overview", label: "Overview", icon: LayoutDashboard },
   { to: "/projects", label: "Projects", icon: Boxes },
   { to: "/deployments", label: "Deployments", icon: Rocket },
-  { to: "/files", label: "Files", icon: FolderTree },
-  { to: "/code-editor", label: "Code Editor", icon: Code2 },
-  { to: "/docker", label: "Docker", icon: Container },
-  { to: "/terminal", label: "Terminal", icon: Terminal },
+  { to: "/files", label: "Files", icon: FolderTree, need: PERMS.filesystemRead },
+  { to: "/code-editor", label: "Code Editor", icon: Code2, need: PERMS.filesystemWrite },
+  { to: "/docker", label: "Docker", icon: Container, need: PERMS.dockerManage },
+  { to: "/terminal", label: "Terminal", icon: Terminal, need: PERMS.terminalAccess },
   { to: "/process-manager", label: "Process Manager", icon: Cpu },
   { to: "/domains", label: "Domains", icon: Globe },
-  { to: "/metrics", label: "Metrics", icon: Activity },
-  { to: "/settings", label: "Settings", icon: Settings },
+  { to: "/metrics", label: "Metrics", icon: Activity, need: PERMS.metricsView },
+  { to: "/marketplace", label: "Marketplace", icon: Store },
+  { to: "/team", label: "Team", icon: Users, need: PERMS.usersManage },
+  { to: "/servers", label: "Cluster", icon: Server, need: PERMS.serversManage },
 ];
 
 export function Sidebar() {
@@ -48,6 +60,7 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const logoutLocal = useAuthStore((s) => s.logoutLocal);
   const navigate = useNavigate();
+  const [actionsOpen, setActionsOpen] = React.useState(false);
 
   const logout = useMutation({
     mutationFn: authApi.logout,
@@ -61,6 +74,32 @@ export function Sidebar() {
       navigate("/login", { replace: true });
     },
   });
+
+  const token = useAuthStore((s) => s.accessToken);
+  const avatarSrc = React.useMemo(() => {
+    if (!user?.avatar_relative_path || !token) return null;
+    const base = env.apiBaseUrl.replace(/\/$/, "");
+    return `${base}/users/me/avatar?token=${encodeURIComponent(token)}`;
+  }, [user?.avatar_relative_path, token]);
+
+  const initials = React.useMemo(() => {
+    const n = user?.name ?? user?.email ?? "";
+    const parts = String(n).trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "?";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [user]);
+
+  const avatarBgStyle = React.useMemo<React.CSSProperties>(() => {
+    if (avatarSrc) return {} as React.CSSProperties;
+    const seed = String(user?.email ?? user?.name ?? "a");
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+    const hue = Math.abs(h) % 360;
+    return { background: `linear-gradient(135deg, hsl(${hue}deg 75% 94%), hsl(${(hue + 30) % 360}deg 70% 86%))` };
+  }, [user, avatarSrc]);
+
+  const role = user?.roles?.[0] ?? (can(user?.permissions, PERMS.usersManage) ? "admin" : "viewer");
 
   return (
     <aside
@@ -87,7 +126,9 @@ export function Sidebar() {
       <Separator className="opacity-60" />
       <nav className="p-2">
         <ul className="space-y-1">
-          {items.map(({ to, label, icon: Icon }) => (
+          {items
+            .filter((it) => !it.need || can(user?.permissions, it.need))
+            .map(({ to, label, icon: Icon }) => (
             <li key={to}>
               <NavLink
                 to={to}
@@ -111,22 +152,73 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto border-t border-sidebar-border/80 p-2">
-        <div className={cn("mb-2 flex items-center gap-2 rounded-lg bg-sidebar-primary/90 p-2", collapsed && "justify-center")}>
-          <UserCircle2 className="size-5 shrink-0 text-gray-100" />
-          <div className={cn("min-w-0", collapsed && "hidden")}>
-            <div className="truncate text-xs font-semibold text-white">{user?.name ?? "User"}</div>
-            <div className="truncate text-[11px] text-gray-200">{user?.email ?? "No email"}</div>
-          </div>
+        <div className="relative mb-2">
+          <button
+            type="button"
+            onClick={() => setActionsOpen((state) => !state)}
+            className={cn(
+              "group w-full rounded-2xl border border-white/10 bg-linear-to-br from-slate-900 via-slate-800 to-slate-950 p-3 text-left shadow-[0_10px_35px_rgba(15,23,42,0.35)] transition-transform hover:-translate-y-0.5",
+              collapsed && "p-2"
+            )}
+          >
+            <div className={cn("flex items-start gap-3", collapsed && "justify-center")}>
+              <div className="relative">
+                <div className="size-12 overflow-hidden rounded-full border border-white/15" style={avatarBgStyle}>
+                  {avatarSrc ? (
+                    <img src={avatarSrc} alt="avatar" className="size-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <span className="font-mono text-sm font-semibold text-slate-950">{initials}</span>
+                    </div>
+                  )}
+                </div>
+                <span className={cn(
+                  "absolute -bottom-0.5 -right-0.5 size-3 rounded-full border border-slate-950 bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.9)]"
+                )} />
+              </div>
+              <div className={cn("min-w-0 flex-1", collapsed && "hidden")}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-white">{user?.name ?? "User"}</div>
+                    <div className="truncate text-[11px] text-slate-300">{user?.email ?? "No email"}</div>
+                  </div>
+                </div>
+                <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-blue-400">
+                    {role}
+                </div>
+              </div>
+              <span className={cn("self-center text-white/80", collapsed && "hidden")}>
+                <EllipsisVertical className="size-4" />
+              </span>
+            </div>
+          </button>
+
+          {actionsOpen && !collapsed ? (
+            <div className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-20 rounded-2xl border border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur">
+              <NavLink to="/profile" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted" onClick={() => setActionsOpen(false)}>
+                <Layers3 className="size-4" /> View Profile
+              </NavLink>
+              <NavLink to="/settings" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted" onClick={() => setActionsOpen(false)}>
+                <Settings className="size-4" /> Settings
+              </NavLink>
+              <NavLink to="/admin" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted" onClick={() => setActionsOpen(false)}>
+                <ShieldCheck className="size-4" /> Admin Panel
+              </NavLink>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                onClick={() => {
+                  setActionsOpen(false);
+                  logout.mutate();
+                }}
+                disabled={logout.isPending}
+              >
+                <LogOut className="size-4" /> Logout
+              </button>
+            </div>
+          ) : null}
         </div>
-        <Button
-          variant="destructive"
-          className={cn("w-full justify-start gap-2 bg-red-500/90 hover:bg-red-600/80 transition-colors duration-200 dark:bg-red-500 dark:hover:bg-red-600/90 cursor-pointer font-semibold text-white", collapsed && "justify-center px-0")}
-          onClick={() => logout.mutate()}
-          disabled={logout.isPending}
-        >
-          <LogOut className="size-4" />
-          <span className={cn(collapsed && "hidden")}>Logout</span>
-        </Button>
+
       </div>
     </aside>
   );
