@@ -1,15 +1,50 @@
 {
   "branches": ["main"],
+  "tagFormat": "v${version}",
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    "@semantic-release/changelog",
-    "@semantic-release/github",
+
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
+
+    [
+      "@semantic-release/github",
+      {
+        "assets": [
+          {
+            "path": "bin/skyport-linux-amd64",
+            "label": "Linux AMD64"
+          },
+          {
+            "path": "bin/skyport-linux-arm64",
+            "label": "Linux ARM64"
+          },
+          {
+            "path": "bin/skyport-darwin-amd64",
+            "label": "macOS Intel"
+          },
+          {
+            "path": "bin/skyport-darwin-arm64",
+            "label": "macOS Apple Silicon"
+          },
+          {
+            "path": "bin/skyport-windows-amd64.exe",
+            "label": "Windows AMD64"
+          }
+        ]
+      }
+    ],
+
     [
       "@semantic-release/git",
       {
         "assets": ["CHANGELOG.md"],
-        "message": "chore(release): ${nextRelease.version}"
+        "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ]
   ]
