@@ -154,6 +154,23 @@ export type DomainMapping = {
   created_at?: string;
 };
 
+export type UpdateCheckResult = {
+  IsUpdateAvailable: boolean;
+  CurrentVersion: string;
+  LatestVersion: string;
+  LatestRelease?: {
+    tag_name: string;
+    name: string;
+    body: string;
+    published_at: string;
+    prerelease: boolean;
+    draft: boolean;
+    html_url: string;
+  };
+  CheckTime: string;
+  Error?: string;
+};
+
 const normalizeProject = (raw: any): Project => ({
   id: raw?.id ?? raw?.ID ?? raw?.Id ?? 0,
   name: raw?.name ?? raw?.Name ?? "",
@@ -297,4 +314,6 @@ export const platformApi = {
   deleteDomainMapping: async (id: number) => (await http.delete(`/proxy/mappings/${id}`)).data,
   caddyStatus: async () => (await http.get<{ installed: boolean; path?: string; version?: string }>("/proxy/caddy/status")).data,
   caddyInstall: async (execute: boolean) => (await http.post("/proxy/caddy/install", { execute })).data,
+
+  checkUpdates: async () => (await http.get<UpdateCheckResult>("/updates/check")).data,
 };

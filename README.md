@@ -6,25 +6,22 @@
 
 > Self-hosted infrastructure for developers who want a calm, modern control plane on a small VPS—without sacrificing ambition.
 
----
 
-## Vision
+### Modern infrastructure management with:
 
-SkyPort aims to become a **lightweight, beautiful, self-hosted developer cloud**—optimized for **512MB–1GB class VPS instances**, **single-command setup**, and **developer-first workflows** (code, ship, observe, repeat).
+- Browser terminal
+- File manager
+- Git deployments
+- PM2 process management
+- Docker orchestration
+- Real-time monitoring
+- Developer-first UI
 
-We believe teams and solo builders should own their runtime, data, and UX—whether they deploy on a $5 instance or a rack of machines—without fighting heavyweight control planes.
+***Built for small VPS (512MB - 1GB RAM) instances without sacrificing power.***
 
----
-
-## Why SkyPort?
-
-- **Small footprint** — Designed with low RAM and single-binary ergonomics in mind.
-- **Honest scope** — We’re building in public; you’ll always know what works today vs. what’s on the roadmap.
-- **Modern stack** — Go + Fiber API, SQLite + GORM for persistence, React + TypeScript for the UI.
-- **Self-host first** — Your machine, your rules; optional Pro/Enterprise layers may arrive later without locking out the community edition.
-- **Open-core friendly** — Community AGPLv3 today; future commercial editions will be clearly separated (see [NOTICE](./NOTICE)).
-
----
+> Docker-based workloads are recommended on VPS instances with 2GB+ RAM for the best experience.
+___
+<br/><br/>
 
 # 📸 Screenshots
 
@@ -153,171 +150,7 @@ Vite defaults to its own port (often `5173`). The UI is **not** yet a full dashb
 
 ---
 
-## API examples
-
-**Health**
-
-```bash
-curl -s http://127.0.0.1:8080/api/v1/health | jq .
-```
-
-Example response:
-
-```json
-{
-  "status": "ok",
-  "service": "skyport",
-  "version": "0.0.1"
-}
-```
-
-**Metrics** *(under active development; schema may evolve)*
-
-```bash
-curl -s http://127.0.0.1:8080/api/v1/metrics | jq .
-```
-
-**WebSockets** *(metrics & terminal)*
-
-SkyPort exposes two WebSocket channels:
-
-- `ws://<host>:<port>/ws/metrics` — push-only metrics stream (JSON snapshots every 2s). Use this for realtime host monitoring.
-- `ws://<host>:<port>/ws/terminal` — interactive shell session (PTY over WebSocket). Requires a valid JWT (see auth) and supports a small JSON control message to resize the PTY:
-
-  Resize example (Text frame):
-
-  ```json
-  {"type":"resize","cols":80,"rows":24}
-  ```
-
-Authentication: provide a JWT either as `?token=<JWT>` query param, via an `Authorization: Bearer <JWT>` header, or in the `Sec-WebSocket-Protocol` header for clients that prefer sending protocols. Example `wscat` usage:
-
-```bash
-# Metrics (no write expected back):
-wscat -c "ws://127.0.0.1:8080/ws/metrics?token=$TOKEN"
-
-# Terminal (interactive):
-wscat -c "ws://127.0.0.1:8080/ws/terminal?token=$TOKEN"
-```
-
-Swagger groups both routes under `Websocket`, but the UI cannot perform a real WebSocket upgrade. Use a WebSocket client such as `wscat`, a browser client, or Postman WebSocket tab.
-
-Terminal socket reliability:
-
-- SkyPort now sends periodic WS ping frames and extends read deadlines on pong/messages to reduce idle disconnects during long sessions.
-
-Postman tip: if header auth is stripped during upgrade, pass JWT through either:
-
-- query: `ws://127.0.0.1:8080/ws/terminal?token=<JWT>`
-- `Sec-WebSocket-Protocol: jwt,<JWT>` (server now negotiates `jwt` subprotocol)
-
----
-
-## Docker helper routes
-
-SkyPort now includes lightweight Docker control APIs:
-
-- `GET /api/v1/docker/status`
-- `POST /api/v1/docker/install` (returns OS-specific install command)
-- `POST /api/v1/docker/start`
-- `POST /api/v1/docker/stop`
-- `POST /api/v1/docker/daemon` (`start|stop|restart`)
-- `GET /api/v1/docker/images`
-- `DELETE /api/v1/docker/image/:name`
-- `POST /api/v1/docker/images/prune`
-- `GET /api/v1/docker/volumes`
-- `DELETE /api/v1/docker/volume/:name`
-- `POST /api/v1/docker/volumes/prune`
-
-If Docker is installed but not on PATH, SkyPort tries common binary locations automatically.
-
----
-
-## Filesystem APIs (absolute paths)
-
-The filesystem module works with absolute paths on the host/VPS:
-
-- `GET /api/v1/files?path=/abs/path`
-- `POST /api/v1/files/folder`
-- `POST /api/v1/files/file`
-- `PUT /api/v1/files/write` (`utf8` or `base64`)
-- `POST /api/v1/files/upload` (`multipart: path + file`)
-- `GET /api/v1/files/download?path=/abs/file`
-- `POST /api/v1/files/read` (auto-detects binary and returns base64 preview)
-- `PATCH /api/v1/files/rename`
-- `DELETE /api/v1/files?path=/abs/path`
-
-Windows path note:
-
-- In JSON, either escape backslashes (`G:\\data\\test.txt`) or use forward slashes (`G:/data/test.txt`).
-- Unescaped `\t` / `\n` sequences become control characters and will be rejected.
-
-Directory downloads:
-
-- `GET /api/v1/files/download?path=/abs/folder` now returns a zip archive.
-
----
-
-## Git helper routes
-
-- `GET /api/v1/system/git/status`
-- `POST /api/v1/system/git/install` (`{"execute": true}` for one-click install attempt)
-
----
-
-## Open-core philosophy
-
-SkyPort is **AGPLv3** today so self-hosters always have source, fork rights, and community leverage. We may later offer **Pro** or **Enterprise** products (hosting, support, or closed add-ons). Those will be **clearly separated** from the community tree; the **community edition is meant to stay open**. See [NOTICE](./NOTICE).
-
----
-
-## Why AGPLv3?
-
-SkyPort is a **network-facing developer platform**. AGPLv3 helps ensure that operators who modify the software and run it as a service **share improvements back** with the community—aligning incentives for long-term sustainability while still allowing aggressive self-hosting and experimentation.
-
-If AGPL is a blocker for your organization, reach out via discussions; we’re open to **separate commercial licensing** for Pro/Enterprise offerings when they exist.
-
----
-
-## 🤝Contributing
-
-We love early contributors—especially docs, DX, and small API improvements.
-
-1. **Open an issue** first for larger changes (architecture, new subsystems).
-2. **Fork** → branch → **PR** with a clear description and test notes (`go test ./...`, manual curl checks).
-3. Keep commits focused; match existing Go / TS style.
-4. Be kind; we’re a small project—constructive review makes everyone faster.
-
----
-
-## 🔒Security
-
-**Please do not** open public issues for undisclosed vulnerabilities.
-
-- Report sensitive issues privately to the maintainers (enable **Security** → **Private vulnerability reporting** on GitHub when available, or use maintainer contact from the repo profile).
-- Include repro steps, impact, and suggested severity.
-- We aim to acknowledge within a few business days for valid reports.
-
----
-
-## Community & discussions
-
-- **GitHub Discussions** — roadmap, ideas, and support threads *(enable in repo settings if not already on)*.
-- **Issues** — bugs and concrete feature proposals.
-- **PRs** — always welcome for docs and code.
-
----
-
-## Future plans
-
-- Ship a **credible v0.1**: health + metrics + minimal dashboard read-only views.
-- Harden **auth** (JWT), **RBAC**, and **audit logging**.
-- Layer **terminal**, **files**, **Docker**, and **deploy** modules behind clear API boundaries.
-- Publish **install scripts** and opinionated **VPS images** once APIs stabilize.
-
----
-
-## Credits
+## 💳 Credits
 
 **SkyPort** is initiated and maintained by Akash Halder (Nil369), Founder of **Akash Halder Technologia** as the brand home for the project.  
 

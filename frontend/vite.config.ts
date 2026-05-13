@@ -22,4 +22,16 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
   },
+  server: {
+    proxy: {
+      '/api/v1': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/ws': {
+        target: 'http://localhost:8080',
+        ws: true,
+      },
+    },
+  },
 })

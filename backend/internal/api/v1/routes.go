@@ -11,14 +11,20 @@ import (
 	"skyport/internal/auth"
 	"skyport/internal/response"
 	"skyport/internal/version"
+	"fmt"
 )
 
 // Mount attaches /api/v1 routes. Pass the root App for handler DI.
 func Mount(a *app.App) {
+	fmt.Println("Mounting API v1 routes...")
 	r := a.Fiber.Group("/api/v1")
 
 	r.Get("/health", health(a))
 	auth.Mount(a, r)
+	mountUpdates(a, r)
+	mountVPS(a, r)
+	mountTerminal(a, r)
+	fmt.Println("API v1 routes mounted successfully")
 }
 
 // health returns a simple service health check.

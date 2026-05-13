@@ -51,7 +51,9 @@ import (
 	"skyport/internal/startup"
 	"skyport/internal/system"
 	"skyport/internal/terminal"
+	"skyport/internal/updates"
 	"skyport/internal/users"
+	"skyport/internal/vps"
 	"skyport/internal/websocket"
 )
 
@@ -140,6 +142,7 @@ func Build(cfg *config.Config) (*app.App, error) {
 	docs.SwaggerInfo.Schemes = []string{"http"}
 
 	container.RegisterModule(&websocket.Module{})
+	container.RegisterModule(&updates.Module{})
 	if cfg.EnableTerminal {
 		container.RegisterModule(&terminal.Module{})
 	}
@@ -160,6 +163,7 @@ func Build(cfg *config.Config) (*app.App, error) {
 	container.RegisterModule(&audit.Module{})
 	container.RegisterModule(&marketplace.Module{})
 	container.RegisterModule(&cluster.Module{})
+	container.RegisterModule(&vps.Module{})
 	container.RegisterModule(&agent.Module{})
 	if cfg.EnableFilesystem {
 		container.RegisterModule(&filesystem.Module{})

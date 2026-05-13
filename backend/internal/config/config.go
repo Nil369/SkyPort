@@ -41,6 +41,10 @@ type Config struct {
 	// OpenRegistration allows POST /auth/register when at least one user already exists.
 	// Disable in production to enforce invite-only onboarding.
 	OpenRegistration bool
+
+	// EncryptionKey is used for AES-256 encryption of sensitive data (SSH keys, passwords).
+	// Must be 16, 24, or 32 bytes when base64 decoded.
+	EncryptionKey string
 }
 
 // Load reads .env when present (local dev), then environment variables.
@@ -83,6 +87,7 @@ func Load() (*Config, error) {
 		EnableProjects:   getBoolEnv("ENABLE_PROJECTS", true),
 		MetricsDiskPath:  getEnv("SKYPORT_METRICS_DISK_PATH", ""),
 		OpenRegistration: getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
+		EncryptionKey:    getEnv("SKYPORT_ENCRYPTION_KEY", "uE8+7Fq3H+vW9O8X/pY5ZQ=="), // Default for dev, should be changed in prod
 	}
 
 	if err := cfg.validate(); err != nil {

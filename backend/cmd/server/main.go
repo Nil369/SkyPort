@@ -2,6 +2,10 @@
 //
 // Flow: config.Load → bootstrap.Run → (signal) graceful shutdown.
 //
+// To build without CGO (recommended for cross-platform compatibility):
+//
+//	go run ./cmd/server
+//
 // @title SkyPort API
 // @version 0.0.1
 // @description Lightweight self-hosted developer cloud platform API

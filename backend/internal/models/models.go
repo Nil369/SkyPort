@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"skyport/internal/vps"
 )
 
 // All returns every model that should exist in SQLite. Order can matter for FKs later.
@@ -32,6 +33,8 @@ func All() []any {
 		&Process{},
 		&EnvironmentVariable{},
 		&DomainMapping{},
+		&vps.VPSServer{},
+		&vps.SSHSession{},
 	}
 }
 
