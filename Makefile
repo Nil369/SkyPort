@@ -9,6 +9,7 @@
 VERSION         ?= 0.0.1
 FRONTEND_DIR    := frontend
 BACKEND_DIR     := backend
+CLI_DIR         := cli
 
 # 1 = npm ci (CI). 0 or unset = npm install (fewer Windows file-lock issues).
 FRONTEND_USE_CI ?= 0
@@ -20,6 +21,7 @@ else
 endif
 
 .PHONY: help frontend-build frontend-sync cross-compile backend-build build-all release branding-icon
+.PHONY: cli-build cli-cross-compile
 
 help:
 	@echo "Targets:"
@@ -27,6 +29,8 @@ help:
 	@echo "  frontend-sync    - copy $(FRONTEND_DIR)/dist -> embed dirs only (no npm)"
 	@echo "  cross-compile    - Go cross-build only (no npm; needs internal/frontend/dist)"
 	@echo "  backend-build    - native Go binary for this machine"
+	@echo "  cli-build        - native SkyPort CLI binary for this machine"
+	@echo "  cli-cross-compile - cross-build SkyPort CLI binaries"
 	@echo "  build-all        - frontend-build then cross-compile"
 	@echo "  release          - same as build-all"
 	@echo "  branding-icon    - create assets/logo.ico placeholder (Windows) if missing"
@@ -61,10 +65,16 @@ endif
 backend-build:
 	$(MAKE) -C $(BACKEND_DIR) build VERSION=$(VERSION)
 
+cli-build:
+	$(MAKE) -C $(CLI_DIR) build VERSION=$(VERSION)
+
 # Cross-compile every OS/arch (no Node). Uses whatever is in backend/internal/frontend/dist.
 cross-compile:
 	$(MAKE) -C $(BACKEND_DIR) build-all VERSION=$(VERSION)
 
-build-all: frontend-build cross-compile
+cli-cross-compile:
+	$(MAKE) -C $(CLI_DIR) build-all VERSION=$(VERSION)
+
+build-all: frontend-build cross-compile cli-cross-compile
 
 release: build-all

@@ -1,4 +1,4 @@
-# Cross-compile SkyPort for all release platforms (Windows host).
+# Cross-compile SkyPort server for all release platforms (Windows host).
 # Run from repo root:  powershell -NoProfile -File backend/scripts/build.ps1
 # Or from backend:     powershell -NoProfile -File scripts/build.ps1
 #
@@ -72,7 +72,7 @@ foreach ($t in $targets) {
   try {
     $env:GOOS = $t.GOOS
     $env:GOARCH = $t.GOARCH
-    $outFile = Join-Path $outDir "skyport$($t.Ext)"
+    $outFile = Join-Path $outDir "skyport-server$($t.Ext)"
     Write-Host "Building $($t.GOOS)/$($t.GOARCH) -> $outFile"
     if ($t.GOOS -eq "windows" -and (Test-Path $WindowsIcon)) {
       Write-Host "  Windows icon embed: $WindowsIcon -> resource.syso"

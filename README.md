@@ -132,9 +132,9 @@ make docs
 
 ```bash
 cd backend
-go build -o bin/skyport ./cmd/server
-./bin/skyport    # Linux/macOS
-# bin\skyport.exe on Windows
+go build -o bin/skyport-server ./cmd/server
+./bin/skyport-server    # Linux/macOS
+# bin\skyport-server.exe on Windows
 ```
 
 Cross-platform release builds:
