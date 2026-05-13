@@ -1,3 +1,11 @@
+# [0.4.0](https://github.com/Nil369/SkyPort/compare/v0.3.0...v0.4.0) (2026-05-13)
+
+
+### Features
+
+* enhance build scripts and UI presentation ([96638da](https://github.com/Nil369/SkyPort/commit/96638daf5abd6621b3f5118c2a85d041d2429fe1))
+* implement API client and types for SkyPort CLI ([aa08cd3](https://github.com/Nil369/SkyPort/commit/aa08cd3d3e2211cf2b76cdda880731a17e790f1a))
+
 # [0.3.0](https://github.com/Nil369/SkyPort/compare/v0.2.0...v0.3.0) (2026-05-13)
 
 
