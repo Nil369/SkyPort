@@ -1,7 +1,13 @@
 APP          := skyport-server
 VERSION      ?= 0.0.1
+ifeq ($(OS),Windows_NT)
+# GNU Make on Windows often uses cmd.exe for $(shell); use cmd-friendly redirection.
+COMMIT       ?= $(shell git rev-parse --short HEAD 2>nul || echo dev)
+BUILD_TIME   ?= $(shell powershell -NoProfile -Command "[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')")
+else
 COMMIT       ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 BUILD_TIME   ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+endif
 
 # Use recursive assignment (=) for LDFLAGS so variables like BUILD_TIME 
 # are evaluated at execution, not just at startup.
@@ -17,7 +23,7 @@ PLATFORMS    := linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64
 # Single native binary (default output: ../bin/server/skyport-server[.exe])
 build:
 ifeq ($(OS),Windows_NT)
-	@if not exist ..\bin\server mkdir ..\bin\server
+	@powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '..\\bin\\server' | Out-Null"
 	go build -trimpath -ldflags "$(LDFLAGS)" -o ../bin/server/$(APP).exe ./cmd/server
 else
 	@mkdir -p ../bin/server

@@ -37,8 +37,13 @@ type Options struct {
 }
 
 var (
+	// Sky / cyan palette (ANSI) for terminals without truecolor.
+	skyDeep   = lipgloss.Color("117")
+	skyBright = lipgloss.Color("159")
+	skySoft   = lipgloss.Color("153")
+
 	styleBanner = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("39")).
+			Foreground(skyDeep).
 			Bold(true)
 
 	styleMuted = lipgloss.NewStyle().
@@ -78,8 +83,7 @@ func isTTY(w io.Writer) bool {
 }
 
 func printRich(w io.Writer, ready time.Duration, o Options) {
-	banner := asciiBanner()
-	fmt.Fprintln(w, styleBanner.Render(banner))
+	fmt.Fprintln(w, skyBrandBanner())
 	head := fmt.Sprintf("SKYPORT v%s ready in %s", version.Version, ready.Round(time.Millisecond))
 	fmt.Fprintln(w, styleBanner.Render(head))
 	envTag := strings.ToUpper(strings.TrimSpace(o.Environment))
@@ -153,26 +157,14 @@ func wsURL(httpBase string) string {
 	return "ws://" + u
 }
 
-// asciiBanner uses a light box + plain label so “SKYPORT” stays legible on Windows
-// and narrow fonts (dense Unicode block letters often blend into an unreadable mass).
-func asciiBanner() string {
-	const inner = 40 // characters between side borders
-	top := "╭" + strings.Repeat("─", inner) + "╮"
-	bot := "╰" + strings.Repeat("─", inner) + "╯"
-	padLine := "│" + strings.Repeat(" ", inner) + "│"
-
-	mark := "SKYPORT"
-	tag := "lightweight developer cloud OS"
-	line := func(s string) string {
-		s = strings.TrimSpace(s)
-		if len(s) > inner {
-			s = s[:inner]
-		}
-		pad := inner - len(s)
-		left := pad / 2
-		right := pad - left
-		return "│" + strings.Repeat(" ", left) + s + strings.Repeat(" ", right) + "│"
-	}
-
-	return strings.Join([]string{top, padLine, line(mark), line(tag), padLine, bot}, "\n")
+// skyBrandBanner draws a rounded frame in sky tones with the product name and tagline.
+func skyBrandBanner() string {
+	title := lipgloss.NewStyle().Foreground(skyBright).Bold(true).Render("SkyPort")
+	sub := lipgloss.NewStyle().Foreground(skySoft).Render("The Lightweight Developer Cloud OS")
+	body := lipgloss.JoinVertical(lipgloss.Center, title, sub)
+	return lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(skyDeep).
+		Padding(0, 2).
+		Render(body)
 }

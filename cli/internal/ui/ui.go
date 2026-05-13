@@ -18,10 +18,17 @@ var (
 )
 
 func Banner() {
-	if err := pterm.DefaultBigText.WithLetters(pterm.NewLettersFromString("SkyPort")).Render(); err != nil {
-		fmt.Println(Accent.Sprint("SkyPort"))
+	sky := pterm.NewRGB(126, 196, 232)
+	letters := pterm.NewLettersFromStringWithRGB("SkyPort", sky)
+	if err := pterm.DefaultBigText.WithLetters(letters).Render(); err != nil {
+		fmt.Println(pterm.NewStyle(pterm.FgLightCyan).Sprint("SkyPort"))
 	}
-	fmt.Println(Muted.Sprint("  cloud control for embedded web UI, deployments, terminals, and automation"))
+	box := pterm.DefaultBox.
+		WithTitle("SkyPort").
+		WithTitleTopCenter(true).
+		WithBoxStyle(pterm.NewStyle(pterm.FgLightCyan)).
+		WithTextStyle(pterm.NewStyle(pterm.FgLightCyan))
+	_ = box.Println("The Lightweight Developer Cloud OS")
 }
 
 func Spinner(text string, fn func() error) error {

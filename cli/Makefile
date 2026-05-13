@@ -2,8 +2,13 @@ APP          := skyport
 BIN_DIR      := $(abspath ../bin/cli)
 BIN_DIR_WIN  := $(subst /,\,$(BIN_DIR))
 VERSION      ?= 0.0.1
+ifeq ($(OS),Windows_NT)
+COMMIT       ?= $(shell git rev-parse --short HEAD 2>nul || echo dev)
+BUILD_TIME   ?= $(shell powershell -NoProfile -Command "[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')")
+else
 COMMIT       ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 BUILD_TIME   ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+endif
 
 LDFLAGS      = -s -w \
 		       -X skyport-cli/internal/version.Version=$(VERSION) \
@@ -25,8 +30,8 @@ endif
 
 build-all:
 ifeq ($(OS),Windows_NT)
-	@echo "Windows detected: using direct cross compile"
-	@powershell -NoProfile -Command "$platforms=@('linux/amd64','linux/arm64','windows/amd64','darwin/amd64','darwin/arm64'); foreach($p in $platforms){ $parts=$p.Split('/'); $os=$parts[0]; $arch=$parts[1]; $ext= if($os -eq 'windows'){'.exe'} else {''}; $out='..\\bin\\' + $os + '-' + $arch; New-Item -ItemType Directory -Force -Path $out | Out-Null; $env:GOOS=$os; $env:GOARCH=$arch; go build -trimpath -ldflags '$(LDFLAGS)' -o ($out + '\\$(APP)' + $ext) .; Remove-Item Env:GOOS,Env:GOARCH -ErrorAction SilentlyContinue }"
+	@echo "Windows detected: using scripts/build.ps1"
+	@powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 else
 	@mkdir -p ../bin/cli
 	@for p in $(PLATFORMS); do \

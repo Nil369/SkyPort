@@ -55,7 +55,8 @@ if ($GenerateDocs -eq "1") {
   }
 }
 
-$BinRoot = Join-Path $BackendRoot "..\bin"
+# Match Unix Makefile + release.yml: ../bin/server/<GOOS>-<GOARCH>/
+$BinRoot = Join-Path $BackendRoot "..\bin\server"
 New-Item -ItemType Directory -Force -Path $BinRoot | Out-Null
 
 $targets = @(
@@ -88,4 +89,4 @@ foreach ($t in $targets) {
   }
 }
 
-Write-Host "Done. Artifacts under $BinRoot"
+Write-Host "Done. Artifacts under $BinRoot (layout matches release.yml: bin/server/<GOOS>-<GOARCH>/)"
