@@ -162,7 +162,7 @@ func asciiBanner() string {
 	padLine := "│" + strings.Repeat(" ", inner) + "│"
 
 	mark := "SKYPORT"
-	tag := "lightweight developer cloud"
+	tag := "lightweight developer cloud OS"
 	line := func(s string) string {
 		s = strings.TrimSpace(s)
 		if len(s) > inner {
