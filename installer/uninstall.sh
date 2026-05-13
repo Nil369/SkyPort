@@ -13,7 +13,8 @@ set -euo pipefail
 SKYPORT_PURGE_DATA="${SKYPORT_PURGE_DATA:-0}"
 
 INSTALL_DIR="/opt/skyport"
-BIN_PATH="/usr/local/bin/skyport"
+SERVER_BIN="${SERVER_BIN:-/usr/local/bin/skyport-server}"
+CLI_BIN="${CLI_BIN:-/usr/local/bin/skyport}"
 ENV_PATH="/etc/skyport/skyport.env"
 SERVICE_PATH="/etc/systemd/system/skyport.service"
 
@@ -41,8 +42,15 @@ main() {
     rm -f "${SERVICE_PATH}"
   fi
 
-  if [ -f "${BIN_PATH}" ]; then
-    rm -f "${BIN_PATH}"
+  if [ -f "${SERVER_BIN}" ]; then
+    rm -f "${SERVER_BIN}"
+  fi
+  if [ -f "${CLI_BIN}" ]; then
+    rm -f "${CLI_BIN}"
+  fi
+  # Legacy single-binary installs
+  if [ -f "/usr/local/bin/skyport" ]; then
+    rm -f "/usr/local/bin/skyport"
   fi
 
   if [ -f "${ENV_PATH}" ]; then

@@ -155,5 +155,6 @@ reference/
 /*reference/
 assets/*
 !assets/logo.ico
+!assets/screenshots
 artifacts/
 stop

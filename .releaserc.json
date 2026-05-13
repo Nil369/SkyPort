@@ -17,24 +17,44 @@
       {
         "assets": [
           {
-            "path": "bin/skyport-linux-amd64",
+            "path": "bin/skyport-server-linux-amd64",
             "label": "Linux AMD64"
           },
           {
-            "path": "bin/skyport-linux-arm64",
+            "path": "bin/skyport-server-linux-arm64",
             "label": "Linux ARM64"
           },
           {
-            "path": "bin/skyport-darwin-amd64",
+            "path": "bin/skyport-server-darwin-amd64",
             "label": "macOS Intel"
           },
           {
-            "path": "bin/skyport-darwin-arm64",
+            "path": "bin/skyport-server-darwin-arm64",
             "label": "macOS Apple Silicon"
           },
           {
-            "path": "bin/skyport-windows-amd64.exe",
+            "path": "bin/skyport-server-windows-amd64.exe",
             "label": "Windows AMD64"
+          },
+          {
+            "path": "bin/skyport-linux-amd64",
+            "label": "SkyPort CLI Linux AMD64"
+          },
+          {
+            "path": "bin/skyport-linux-arm64",
+            "label": "SkyPort CLI Linux ARM64"
+          },
+          {
+            "path": "bin/skyport-darwin-amd64",
+            "label": "SkyPort CLI macOS Intel"
+          },
+          {
+            "path": "bin/skyport-darwin-arm64",
+            "label": "SkyPort CLI macOS Apple Silicon"
+          },
+          {
+            "path": "bin/skyport-windows-amd64.exe",
+            "label": "SkyPort CLI Windows AMD64"
           }
         ]
       }

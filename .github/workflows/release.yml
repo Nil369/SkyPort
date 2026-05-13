@@ -54,13 +54,24 @@ jobs:
           VERSION: dev
         run: make build-all
 
+      - name: Cross-compile CLI binaries
+        working-directory: cli
+        env:
+          VERSION: dev
+        run: make build-all
+
       - name: Prepare release assets
         run: |
-          cp bin/linux-amd64/skyport bin/skyport-linux-amd64
-          cp bin/linux-arm64/skyport bin/skyport-linux-arm64
-          cp bin/darwin-amd64/skyport bin/skyport-darwin-amd64
-          cp bin/darwin-arm64/skyport bin/skyport-darwin-arm64
-          cp bin/windows-amd64/skyport.exe bin/skyport-windows-amd64.exe
+          cp bin/server/linux-amd64/skyport-server bin/skyport-server-linux-amd64
+          cp bin/server/linux-arm64/skyport-server bin/skyport-server-linux-arm64
+          cp bin/server/darwin-amd64/skyport-server bin/skyport-server-darwin-amd64
+          cp bin/server/darwin-arm64/skyport-server bin/skyport-server-darwin-arm64
+          cp bin/server/windows-amd64/skyport-server.exe bin/skyport-server-windows-amd64.exe
+          cp bin/cli/linux-amd64/skyport bin/skyport-linux-amd64
+          cp bin/cli/linux-arm64/skyport bin/skyport-linux-arm64
+          cp bin/cli/darwin-amd64/skyport bin/skyport-darwin-amd64
+          cp bin/cli/darwin-arm64/skyport bin/skyport-darwin-arm64
+          cp bin/cli/windows-amd64/skyport.exe bin/skyport-windows-amd64.exe
 
       - name: Semantic Release
         env:

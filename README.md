@@ -1,4 +1,4 @@
-<img width="1000" height="300" alt="SKY_PORT_LOGO_BANNER_1" src="https://github.com/user-attachments/assets/472ceeb6-daef-4067-b2c0-f2575ab9ee1a" />
+<img width="1000" height="360" alt="SKY_PORT_LOGO_BANNER_1" src="https://github.com/user-attachments/assets/472ceeb6-daef-4067-b2c0-f2575ab9ee1a" />
 
 # SkyPort
 
@@ -21,34 +21,49 @@
 
 > Docker-based workloads are recommended on VPS instances with 2GB+ RAM for the best experience.
 ___
-<br/><br/>
+<br/>
 
 # 📸 Screenshots
 
-## Backend API Docs:
+| Overview | Projects |
+|---|---|
+| ![](./assets/screenshots/dashboard.png) | ![](./assets/screenshots/projects.png) |
 
-<img width="1314" height="915" alt="image" src="https://github.com/user-attachments/assets/eded94ba-aec2-4478-bc82-f4cfb91145e2" />
+| Deployments | Docker Management |
+|---|---|
+| ![](./assets/screenshots/deployment-pm2.png) | ![](./assets/screenshots/docker-start-images.png) |
 
-## Dashboard After Booting Up and Login:
+| Code Editor | File Explorer |
+|---|---|
+| ![](./assets/screenshots/code-editor.png) |  ![](./assets/screenshots/file-explorer.png) |
 
-### 1.Overview:
+| Terminal (Dark) | Terminal (Light) |
+|---|---|
+| ![](./assets/screenshots/terminal_dark.png) | ![](./assets/screenshots/terminal_light.png) |
 
-<img width="1919" height="913" alt="image" src="https://github.com/user-attachments/assets/9090692d-e09b-4425-925c-8fd9fae4e932" />
+| PM2 Process Management | Domain Management |
+|---|---|
+| ![](./assets/screenshots/pm2-manager.png) | ![](./assets/screenshots/domain_management.png) |
 
-### 2. Dark Mode & File System (No Need of FTP Clients):
-<img width="1919" height="916" alt="image" src="https://github.com/user-attachments/assets/cefd2731-e241-4117-9133-f4abc4304be1" />
+| System Metrics (CPU) | System Metrics (Memory) |
+|---|---|
+| ![](./assets/screenshots/system-metrics-cpu.png) | ![](./assets/screenshots/system-metrics-memory.png) |
 
-### 3. Virual Terminal:
-<img width="1919" height="907" alt="image" src="https://github.com/user-attachments/assets/3add198a-99db-4373-83d0-8620c01647b3" />
+| Marketplace | Marketplace Install |
+|---|---|
+| ![](./assets/screenshots/skyport-marketplace.png) | ![](./assets/screenshots/skyport-marketplace-install.png) |
 
-### 4. Pull Your Project From Github (Even Private One!)
-<img width="1911" height="906" alt="image" src="https://github.com/user-attachments/assets/b49af8d0-f774-42fe-8b7d-7806c0db7157" />
+| Team Management | Cluster / VPS Management |
+|---|---|
+| ![](./assets/screenshots/team_management.png) | ![](./assets/screenshots/cluster_management.png) |
 
-### 5. Docker & Container Orchestration(Coming Soon)
-<img width="1905" height="894" alt="image" src="https://github.com/user-attachments/assets/2a442769-9513-4315-bd04-9423bca2067c" />
+| SSH Remote Server | Profile Management |
+|---|---|
+| ![](./assets/screenshots/ssh-remote-server.png) | ![](./assets/screenshots/profile_management.png) |
 
-### 6. PM2 Process manager for low-end VPS (512MB ram constraint!)
-<img width="1919" height="911" alt="image" src="https://github.com/user-attachments/assets/982567c3-2ee7-496a-ab78-8caabd257894" />
+| Admin Panel
+|---|
+| ![](./assets/screenshots/admin_panel.png) | 
 
 ---
 
@@ -117,9 +132,9 @@ make docs
 
 ```bash
 cd backend
-go build -o bin/skyport ./cmd/server
-./bin/skyport    # Linux/macOS
-# bin\skyport.exe on Windows
+go build -o bin/skyport-server ./cmd/server
+./bin/skyport-server    # Linux/macOS
+# bin\skyport-server.exe on Windows
 ```
 
 Cross-platform release builds:
