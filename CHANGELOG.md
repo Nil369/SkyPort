@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/Nil369/SkyPort/compare/v0.2.0...v0.3.0) (2026-05-13)
+
+
+### Features
+
+* enhance configuration and API for VPS management ([2643121](https://github.com/Nil369/SkyPort/commit/2643121c472f44f2790448a13cf60194a93e51e3))
+
 # [0.2.0](https://github.com/Nil369/SkyPort/compare/v0.1.0...v0.2.0) (2026-05-12)
 
 
