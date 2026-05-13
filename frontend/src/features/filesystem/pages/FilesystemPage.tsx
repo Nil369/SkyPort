@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
-import { ArrowLeft, Folder, Upload, Download, ExternalLink } from "lucide-react";
+import { ArrowLeft, Folder, Upload, Download } from "lucide-react";
 import { getFileIcon } from "@/lib/fileIcons";
 import * as XLSX from "xlsx";
 
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
+import { FilePreview } from "@/features/code-editor/components/FilePreview";
 
 export function FilesystemPage() {
   const token = useAuthStore((s) => s.accessToken);
@@ -28,6 +29,12 @@ export function FilesystemPage() {
   const [imageUrl, setImageUrl] = React.useState<string>("");
   const [sheetRows, setSheetRows] = React.useState<string[][]>([]);
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
+    };
+  }, [pdfUrl]);
 
   const listing = useQuery({
     queryKey: ["files", currentPath],
@@ -218,11 +225,11 @@ export function FilesystemPage() {
           <div className="h-[70vh]">
             <ResizablePanels
               left={
-                <div className="h-full bg-card">
-                  <div className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground">
+                <div className="flex h-full flex-col bg-card border-r border-border/60">
+                  <div className="shrink-0 border-b border-border/70 px-4 py-3 text-xs text-muted-foreground bg-muted/10">
                     Explorer ({listing.data?.path ?? currentPath})
                   </div>
-                  <div className="h-[calc(70vh-40px)] overflow-auto p-2">
+                  <div className="h-[calc(70vh-40px)] overflow-y-auto p-2" style={{ scrollbarGutter: 'stable' }}>
                     {(listing.data?.items ?? []).map((item) => (
                       <div key={item.path} className="group flex w-full items-center gap-1 rounded-md hover:bg-muted">
                         <button
@@ -244,6 +251,13 @@ export function FilesystemPage() {
                             }
                             if (looksLikePdf(item.path)) {
                               setPdfUrl(previewUrl(item.path, token));
+                              return;
+                            }
+                            if (looksLikePptx(item.path) || looksLikeVideo(item.path)) {
+                              setPdfUrl("");
+                              setImageUrl("");
+                              setSheetRows([]);
+                              setValue("");
                               return;
                             }
                             readFile.mutate(item.path);
@@ -295,26 +309,12 @@ export function FilesystemPage() {
                     </div>
                   </div>
                   <div className="h-[calc(70vh-40px)]">
-                    {imageUrl ? (
-                      <div className="flex h-full items-center justify-center overflow-auto bg-muted/20">
-                        <img src={imageUrl} alt="File preview" className="max-h-full max-w-full object-contain" />
-                      </div>
-                    ) : pdfUrl ? (
-                      <object data={pdfUrl} type="application/pdf" className="h-full w-full">
-                        <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                          <span>Inline PDF preview unavailable in this browser.</span>
-                          <div className="flex items-center gap-2">
-                            <Button size="sm" variant="outline" onClick={() => window.open(pdfUrl, "_blank", "noopener,noreferrer")}>
-                              <ExternalLink className="size-4" />
-                              Open in new tab
-                            </Button>
-                            <Button size="sm" onClick={() => selected && handleDownload(selected)} disabled={!selected}>
-                              <Download className="size-4" />
-                              Download
-                            </Button>
-                          </div>
-                        </div>
-                      </object>
+                    {selected && isPreviewable(selected) ? (
+                      <FilePreview
+                        url={pdfUrl || imageUrl || previewUrl(selected, token)}
+                        path={selected}
+                        onDownload={() => handleDownload(selected)}
+                      />
                     ) : sheetRows.length > 0 ? (
                       <div className="h-full overflow-auto p-3">
                         <div className="mb-2 text-xs text-muted-foreground">Excel preview (first sheet, first 200 rows)</div>
@@ -346,6 +346,16 @@ export function FilesystemPage() {
   );
 }
 
+function isPreviewable(path: string) {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  return [
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "ico",
+    "pdf", "docx", "pptx", "ppt",
+    "mp3", "wav", "ogg",
+    "mp4", "mkv", "webm", "mov", "ogv",
+  ].includes(ext);
+}
+
 function looksLikeSheet(path: string) {
   const p = path.toLowerCase();
   return p.endsWith(".xlsx") || p.endsWith(".xls") || p.endsWith(".csv");
@@ -356,6 +366,20 @@ function looksLikeImage(path: string) {
 }
 function looksLikePdf(path: string) {
   return path.toLowerCase().endsWith(".pdf");
+}
+function looksLikePptx(path: string) {
+  const p = path.toLowerCase();
+  return p.endsWith(".pptx") || p.endsWith(".ppt");
+}
+function looksLikeVideo(path: string) {
+  const p = path.toLowerCase();
+  return (
+    p.endsWith(".mp4") ||
+    p.endsWith(".webm") ||
+    p.endsWith(".mkv") ||
+    p.endsWith(".mov") ||
+    p.endsWith(".ogv")
+  );
 }
 function parentPath(path: string) {
   const normalized = path.replace(/\\/g, "/");

@@ -172,6 +172,9 @@
   * {
     @apply border-border outline-ring/50;
     }
+  .sidebar-container {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
     }
@@ -188,8 +191,13 @@
   overflow: auto;
 }
 
+button {
+  cursor: pointer;
+}
+
 /* Scroll-bar & Text-Seclection Styling */
 
+/* Hide scrollbars on elements with .invisible-scroll */
 .invisible-scroll::-webkit-scrollbar {
   display: none;
 }
@@ -215,6 +223,9 @@
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
   background: #85b4ffca;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #1a1a1a;
 }
 
 ::selection {

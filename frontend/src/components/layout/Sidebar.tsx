@@ -183,7 +183,7 @@ export function Sidebar() {
                     <div className="truncate text-[11px] text-slate-300">{user?.email ?? "No email"}</div>
                   </div>
                 </div>
-                <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 max-w-16 my-1 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
+                <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 max-w-22 my-1 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
                     {role}
                 </div>
               </div>

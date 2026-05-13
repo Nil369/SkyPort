@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ArrowLeft, Upload, Download, ExternalLink } from "lucide-react";
+import { ChevronRight, ArrowLeft, Upload, Download } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { ResizablePanels } from "@/components/layout/ResizablePanels";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { CodeExplorerTree } from "@/features/code-editor/components/CodeExplorerTree";
+import { FilePreview } from "@/features/code-editor/components/FilePreview";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
@@ -164,8 +165,8 @@ export function CodeEditorPage() {
           <div className="h-[68vh]">
             <ResizablePanels
               left={
-                <div className="h-full overflow-auto border-r border-border/60 p-2">
-                  <div className="mb-2 flex items-center gap-1 rounded-md border border-border/70 p-2 text-xs text-muted-foreground">
+                <div className="flex h-full flex-col border-r border-border/60">
+                  <div className="shrink-0 mb-2 flex items-center gap-1 border-b border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
                     <button
                       type="button"
                       className="rounded px-1 py-0.5 hover:bg-muted"
@@ -185,26 +186,29 @@ export function CodeEditorPage() {
                       {activeDirPath || explorerRoot || projectPath || "No folder selected"}
                     </span>
                   </div>
-                  <CodeExplorerTree
-                    rootPath={explorerRoot}
-                    depth={0}
-                    activeDirPath={activeDirPath}
-                    onOpenDirectory={(path) => {
-                      setActiveDirPath(path);
-                      setCustomPath(path);
-                    }}
-                    onOpenFile={(item) => {
-                      setSelectedPath(item.path);
-                      if (isPreviewable(item.path)) {
-                        setPreviewUrl(buildPreviewUrl(item.path, token));
-                        setCode("");
-                        setSavedCode("");
-                        return;
-                      }
-                      setPreviewUrl("");
-                      readFile.mutate(item.path);
-                    }}
-                  />
+                  <div className="h-[calc(68vh-36px)] overflow-y-auto p-2" style={{ scrollbarGutter: 'stable' }}>
+                    <CodeExplorerTree
+                      rootPath={explorerRoot}
+                      depth={0}
+                      activeDirPath={activeDirPath}
+                      selectedPath={selectedPath}
+                      onOpenDirectory={(path) => {
+                        setActiveDirPath(path);
+                        setCustomPath(path);
+                      }}
+                      onOpenFile={(item) => {
+                        setSelectedPath(item.path);
+                        if (isPreviewable(item.path)) {
+                          setPreviewUrl(buildPreviewUrl(item.path, token));
+                          setCode("");
+                          setSavedCode("");
+                          return;
+                        }
+                        setPreviewUrl("");
+                        readFile.mutate(item.path);
+                      }}
+                    />
+                  </div>
                 </div>
               }
               right={
@@ -235,36 +239,20 @@ export function CodeEditorPage() {
                   </div>
                   <div className="h-[calc(68vh-37px)]">
                     {previewUrl ? (
-                      selectedPath.toLowerCase().endsWith(".pdf") ? (
-                        <object data={previewUrl} type="application/pdf" className="h-full w-full">
-                          <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                            <span>PDF preview unavailable in this browser.</span>
-                            <div className="flex items-center gap-2">
-                              <Button size="sm" variant="outline" onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}>
-                                <ExternalLink className="size-4" />
-                                Open in new tab
-                              </Button>
-                              <Button size="sm" onClick={() => selectedPath && handleDownload(selectedPath, token)} disabled={!selectedPath}>
-                                <Download className="size-4" />
-                                Download
-                              </Button>
-                            </div>
-                          </div>
-                        </object>
-                      ) : (
-                        <div className="flex h-full items-center justify-center overflow-auto bg-muted/20">
-                          <img src={previewUrl} alt="Preview" className="max-h-full max-w-full object-contain" />
-                        </div>
-                      )
+                      <FilePreview 
+                        url={previewUrl} 
+                        path={selectedPath} 
+                        onDownload={() => handleDownload(selectedPath, token)} 
+                      />
                     ) : (
-                      <div className="h-full">
+                      <div className="h-full flex flex-col min-h-0">
                         <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
                           <span className="truncate">{selectedPath ? `Editing ${selectedPath}` : "Select a file to start editing"}</span>
                           <span>
                             {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
                           </span>
                         </div>
-                        <div className="h-[calc(100%-29px)]">
+                        <div className="flex-1 overflow-hidden min-h-0">
                           <CodeEditor value={code} onChange={setCode} language={selectedLanguage} />
                         </div>
                       </div>
@@ -295,15 +283,14 @@ function parentFsPath(p: string): string {
 
 function isPreviewable(path: string) {
   const p = path.toLowerCase();
-  return (
-    p.endsWith(".png") ||
-    p.endsWith(".jpg") ||
-    p.endsWith(".jpeg") ||
-    p.endsWith(".gif") ||
-    p.endsWith(".webp") ||
-    p.endsWith(".svg") ||
-    p.endsWith(".pdf")
-  );
+  const previewExtensions = [
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
+    ".pdf",
+    ".docx", ".pptx", ".ppt",
+    ".mp3", ".wav", ".ogg",
+    ".mp4", ".mkv", ".webm"
+  ];
+  return previewExtensions.some(ext => p.endsWith(ext));
 }
 function buildPreviewUrl(path: string, token?: string | null) {
   const url = new URL(`${env.apiBaseUrl}/files/download`);

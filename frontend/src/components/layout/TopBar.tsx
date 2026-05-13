@@ -1,14 +1,22 @@
-import { PlugZap, Search } from "lucide-react";
+import { Bell, PlugZap, Search, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { useQuery } from "@tanstack/react-query";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useWebSocket } from "@/services/ws/useWebSocket";
 import { useAuthStore } from "@/stores/authStore";
+import { useUIStore } from "@/stores/uiStore";
+import { platformApi } from "@/features/platform/api";
 
 function statusDot(status: string) {
   switch (status) {
@@ -33,6 +41,16 @@ export function TopBar({ className }: { className?: string }) {
   const isConnected = metricsWs === "connected" || terminalWs === "connected";
   const ws = isConnected ? "connected" : metricsWs;
   const reconnectable = metricsWs === "disconnected" || metricsWs === "error" || metricsWs === "reconnecting";
+
+  const { setShowReleaseNotes, dismissedUpdateVersion, dismissUpdate } = useUIStore();
+  const { data: update } = useQuery({
+    queryKey: ["update-check"],
+    queryFn: platformApi.checkUpdates,
+    refetchInterval: 1000 * 60 * 60,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const hasUpdate = !!update?.IsUpdateAvailable && dismissedUpdateVersion !== update?.LatestVersion;
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -127,6 +145,74 @@ export function TopBar({ className }: { className?: string }) {
         >
           <PlugZap className={cn("size-4", connected && "animate-pulse")} />
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative text-muted-foreground hover:text-foreground"
+              aria-label="Notifications"
+            >
+              <Bell className="size-4" />
+              {hasUpdate && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm ring-2 ring-background animate-in zoom-in duration-300">
+                  1
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+            <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2.5">
+               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notifications</h3>
+               {hasUpdate && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold shadow-sm shadow-red-500/20">1 New</span>}
+            </div>
+            <div className="max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+              {hasUpdate ? (
+                <div 
+                  className="p-4 flex gap-3 hover:bg-muted/50 cursor-pointer transition-colors group" 
+                  onClick={() => setShowReleaseNotes(true)}
+                >
+                    <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0 group-hover:scale-110 transition-transform">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold">Update Available</p>
+                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1 rounded">{update.LatestVersion}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">A new version of SkyPort is ready. Check out the latest features and bug fixes.</p>
+                      <p className="text-[10px] text-primary font-bold mt-2 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        View Release Notes <span className="text-xs">→</span>
+                      </p>
+                    </div>
+                </div>
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center text-muted-foreground/40">
+                    <Bell className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="text-xs font-medium italic">No new notifications</p>
+                </div>
+              )}
+            </div>
+            {hasUpdate && (
+              <div className="border-t bg-muted/10 p-2">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="w-full text-[10px] h-8 text-muted-foreground hover:text-red-500 hover:bg-red-500/5 font-semibold transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (update?.LatestVersion) {
+                      dismissUpdate(update.LatestVersion);
+                    }
+                  }}
+                >
+                  Clear all notifications
+                </Button>
+              </div>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <ModeToggle />
       </div>
