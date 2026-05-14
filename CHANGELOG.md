@@ -1,3 +1,10 @@
+## [0.4.1](https://github.com/Nil369/SkyPort/compare/v0.4.0...v0.4.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* installer local bin path syntax ([3d3004e](https://github.com/Nil369/SkyPort/commit/3d3004e945ec64ca7fdd3a0354ef8355a0443201))
+
 # [0.4.0](https://github.com/Nil369/SkyPort/compare/v0.3.0...v0.4.0) (2026-05-13)
 
 
