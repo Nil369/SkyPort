@@ -101,8 +101,8 @@ func newWhoAmICommand() *cobra.Command {
 				fmt.Println(string(b))
 				return nil
 			}
-			fmt.Println(ui.Accent.Sprint(me.Name), "<"+me.Email+">")
-			fmt.Println(ui.Muted.Sprint(strings.Join(me.Roles, ", ")))
+			fmt.Println(ui.Accent.Render(me.Name), "<"+me.Email+">")
+			fmt.Println(ui.Muted.Render(strings.Join(me.Roles, ", ")))
 			return nil
 		},
 	}
