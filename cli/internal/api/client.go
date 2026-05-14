@@ -19,10 +19,10 @@ import (
 )
 
 type Client struct {
-	BaseURL    string
-	Token      string
-	HTTP       *http.Client
-	UserAgent  string
+	BaseURL   string
+	Token     string
+	HTTP      *http.Client
+	UserAgent string
 }
 
 func New(baseURL, token string) *Client {
@@ -30,7 +30,7 @@ func New(baseURL, token string) *Client {
 		BaseURL:   strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		Token:     strings.TrimSpace(token),
 		HTTP:      &http.Client{Timeout: 60 * time.Second},
-		UserAgent:  "SkyPort CLI/1.0",
+		UserAgent: "SkyPort CLI/1.0",
 	}
 }
 
@@ -84,6 +84,11 @@ func (c *Client) req(ctx context.Context, method, path string, body any, out any
 		return nil
 	}
 	return json.Unmarshal(data, out)
+}
+
+// Req is the exported version of req for use by other packages
+func (c *Client) Req(ctx context.Context, method, path string, body any, out any) error {
+	return c.req(ctx, method, path, body, out)
 }
 
 func (c *Client) health(ctx context.Context) (map[string]any, error) {
@@ -174,7 +179,7 @@ func (c *Client) CreateDeployment(ctx context.Context, req map[string]any) (*Dep
 
 func (c *Client) ListVPS(ctx context.Context) ([]VPS, error) {
 	var payload struct {
-		Success bool `json:"success"`
+		Success bool  `json:"success"`
 		Data    []VPS `json:"data"`
 	}
 	if err := c.req(ctx, http.MethodGet, "/api/v1/vps?offset=0&limit=200", nil, &payload); err != nil {
@@ -217,9 +222,43 @@ func (c *Client) RecordMarketplaceInstall(ctx context.Context, slug, mode, statu
 	return out, nil
 }
 
-func (c *Client) ListFiles(ctx context.Context, path string) (map[string]any, error) {
-	var out map[string]any
+func (c *Client) ListFiles(ctx context.Context, path string) (*FileListResponse, error) {
+	var out FileListResponse
 	if err := c.req(ctx, http.MethodGet, "/api/v1/files?path="+url.QueryEscape(path), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) ReadFile(ctx context.Context, path string) (*FileContentResponse, error) {
+	var out FileContentResponse
+	if err := c.req(ctx, http.MethodPost, "/api/v1/files/read", map[string]string{"path": path}, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *Client) WriteFile(ctx context.Context, path, content string) (map[string]any, error) {
+	var out map[string]any
+	body := map[string]string{"path": path, "content": content, "encoding": "utf8"}
+	if err := c.req(ctx, http.MethodPut, "/api/v1/files/write", body, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) CreateFolder(ctx context.Context, path string) (map[string]any, error) {
+	var out map[string]any
+	if err := c.req(ctx, http.MethodPost, "/api/v1/files/folder", map[string]string{"path": path}, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) RenameFile(ctx context.Context, oldPath, newPath string) (map[string]any, error) {
+	var out map[string]any
+	body := map[string]string{"old_path": oldPath, "new_path": newPath}
+	if err := c.req(ctx, http.MethodPatch, "/api/v1/files/rename", body, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

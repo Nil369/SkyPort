@@ -6,7 +6,7 @@
 # To cross-compile without touching Node at all (uses committed embed placeholder or prior sync):
 #     make cross-compile
 
-VERSION         ?= 0.0.1
+VERSION         ?= 0.5.0
 FRONTEND_DIR    := frontend
 BACKEND_DIR     := backend
 CLI_DIR         := cli

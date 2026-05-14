@@ -45,11 +45,9 @@ func newFilesListCommand() *cobra.Command {
 				fmt.Println(string(payload))
 				return nil
 			}
-			items, _ := resp["items"].([]any)
-			rows := make([][]string, 0, len(items))
-			for _, item := range items {
-				m, _ := item.(map[string]any)
-				rows = append(rows, []string{fmt.Sprint(m["name"]), fmt.Sprint(m["path"]), fmt.Sprint(m["is_dir"]), fmt.Sprint(m["size"] )})
+			rows := make([][]string, 0, len(resp.Items))
+			for _, item := range resp.Items {
+				rows = append(rows, []string{item.Name, item.Path, fmt.Sprint(item.IsDir), fmt.Sprint(item.Size)})
 			}
 			return ui.Table([]string{"Name", "Path", "Dir", "Size"}, rows)
 		},

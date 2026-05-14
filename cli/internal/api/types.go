@@ -120,6 +120,29 @@ type DockerContainer struct {
 	Context string `json:"context"`
 }
 
+type FileEntry struct {
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"is_dir"`
+	Size  int64  `json:"size"`
+}
+
+type FileListResponse struct {
+	Path  string      `json:"path"`
+	Items []FileEntry `json:"items"`
+}
+
+type FileContentResponse struct {
+	Path        string `json:"path"`
+	Size        int64  `json:"size"`
+	ContentType string `json:"content_type"`
+	Encoding    string `json:"encoding"`
+	Content     string `json:"content"`
+	Preview     string `json:"preview"`
+	Truncated   bool   `json:"truncated"`
+	Message     string `json:"message"`
+}
+
 type SystemInfo struct {
 	Hostname     string `json:"hostname"`
 	Architecture string `json:"architecture"`

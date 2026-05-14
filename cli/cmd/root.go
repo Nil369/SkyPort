@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -28,12 +29,14 @@ type App struct {
 	ProfileName string
 }
 
+const defaultTimeout = 30 * time.Second
+
 var (
 	configPath string
-	serverName  string
-	outputMode  string
-	bannerOnce  sync.Once
-	rootCmd = &cobra.Command{
+	serverName string
+	outputMode string
+	bannerOnce sync.Once
+	rootCmd    = &cobra.Command{
 		Use:     "skyport",
 		Short:   "SkyPort cloud platform CLI",
 		Version: fmt.Sprintf("%s (%s)", version.Version, version.Commit),
@@ -77,7 +80,9 @@ func init() {
 	rootCmd.AddCommand(newFilesCommand())
 	rootCmd.AddCommand(newMarketplaceCommand())
 	rootCmd.AddCommand(newProjectCommand())
+	rootCmd.AddCommand(newPM2Command())
 	rootCmd.AddCommand(newStartCommand())
+	rootCmd.AddCommand(newTUICommandAlias())
 	rootCmd.AddCommand(newServiceCommand())
 }
 

@@ -74,10 +74,10 @@ func (m *statusModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *statusModel) View() string {
 	if m.loading {
-		return ui.Accent.Sprint("Loading SkyPort dashboard...") + "\n"
+		return ui.Accent.Render("Loading SkyPort dashboard...") + "\n"
 	}
 	if m.err != nil {
-		return ui.Danger.Sprint(m.err.Error()) + "\n"
+		return ui.Danger.Render(m.err.Error()) + "\n"
 	}
 	header := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("SkyPort Status")
 	health := fmt.Sprintf("Server: %v\nVersion: %v", m.serverInfo["service"], m.serverInfo["version"])
@@ -92,13 +92,13 @@ func (m *statusModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left,
 		header,
 		"",
-		ui.Muted.Sprint(health),
+		ui.Muted.Render(health),
 		"",
-		ui.Muted.Sprint(metrics),
+		ui.Muted.Render(metrics),
 		"",
-		ui.Muted.Sprint(deployment),
+		ui.Muted.Render(deployment),
 		"",
-		ui.Warning.Sprint("Press q to quit"),
+		ui.Warning.Render("Press q to quit"),
 	)
 }
 

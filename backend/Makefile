@@ -1,5 +1,5 @@
 APP          := skyport-server
-VERSION      ?= 0.0.1
+VERSION      ?= 0.0.4
 ifeq ($(OS),Windows_NT)
 # GNU Make on Windows often uses cmd.exe for $(shell); use cmd-friendly redirection.
 COMMIT       ?= $(shell git rev-parse --short HEAD 2>nul || echo dev)
@@ -33,7 +33,7 @@ endif
 build-all:
 ifeq ($(OS),Windows_NT)
 	@echo "Windows detected: using scripts/build.ps1"
-	@powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
+	@powershell -NoProfile -ExecutionPolicy Bypass -Command "$$env:VERSION='$(VERSION)'; $$env:COMMIT='$(COMMIT)'; & .\scripts\build.ps1"
 else
 	@echo "Building $(APP) for multiple platforms..."
 	@for p in $(PLATFORMS); do \

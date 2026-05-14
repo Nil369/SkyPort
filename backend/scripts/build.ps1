@@ -37,11 +37,14 @@ if ($env:SYNC_FRONTEND -eq "1") {
 $Version = $env:VERSION
 if (-not $Version) { $Version = "0.0.1" }
 
-$Commit = "dev"
-try {
-  $gitOut = & git -C $BackendRoot rev-parse --short HEAD 2>$null
-  if ($LASTEXITCODE -eq 0 -and $gitOut) { $Commit = $gitOut.Trim() }
-} catch { }
+$Commit = $env:COMMIT
+if (-not $Commit) {
+  $Commit = "dev"
+  try {
+    $gitOut = & git -C $BackendRoot rev-parse --short HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitOut) { $Commit = $gitOut.Trim() }
+  } catch { }
+}
 
 $BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $LdFlags = "-s -w -X skyport/internal/version.Version=$Version -X skyport/internal/version.Commit=$Commit -X skyport/internal/version.BuildTime=$BuildTime"

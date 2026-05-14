@@ -14,15 +14,18 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 
+	"skyport-cli/internal/tui"
 	"skyport-cli/internal/ui"
 )
 
 func newStartCommand() *cobra.Command {
 	cmd := &cobra.Command{Use: "start", Short: "Start SkyPort services"}
 	cmd.AddCommand(newStartWebUICommand())
+	cmd.AddCommand(newStartTUICommand())
 	return cmd
 }
 
@@ -239,4 +242,52 @@ func openBrowser(target string) error {
 	default:
 		return exec.Command("xdg-open", target).Start()
 	}
+}
+
+func newStartTUICommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: "Start the interactive terminal UI",
+		Long:  "Launch the embedded SkyPort terminal user interface for managing your infrastructure",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			app, err := requireClient(cmd)
+			if err != nil {
+				return err
+			}
+
+			serverName := app.Profile.Name
+			if strings.TrimSpace(serverName) == "" {
+				serverName = app.Profile.BaseURL
+			}
+
+			// Build the TUI model with initialized state
+			tuiModel, err := tui.New(context.Background(), nil, app.Client, serverName)
+			if err != nil {
+				return err
+			}
+
+			// Run TUI
+			if _, err := tea.NewProgram(tuiModel, tea.WithAltScreen()).Run(); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	}
+}
+
+func newTUICommandAlias() *cobra.Command {
+	return &cobra.Command{
+		Use:   "tui",
+		Short: "Alias for 'skyport start tui'",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return newStartTUICommand().RunE(cmd, args)
+		},
+	}
+}
+
+func launchTUI(ctx context.Context, app *App) (interface{}, error) {
+	// This will be implemented when the TUI module is fully integrated
+	ui.Infof("TUI mode not yet fully implemented. Use 'skyport start webui' for the browser-based UI")
+	return nil, nil
 }
