@@ -1,4 +1,5 @@
-title: CLI
+title: CLI & TUI
 children:
   - Installation
   - Commands
+  - Overview
