@@ -1,0 +1,230 @@
+/* @import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap'); */
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-blue-50: #eff6ff;
+  --color-blue-100: #dbeafe;
+  --color-blue-200: #bfdbfe;
+  --color-blue-300: #93c5fd;
+  --color-blue-400: #60a5fa;
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  --color-blue-700: #1d4ed8;
+  --color-blue-800: #1e40af;
+  --color-blue-900: #1e3a8a;
+  --color-blue-950: #172554;
+}
+
+:root {
+  font-family: var(--font-sans);
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* NUXT PRIMARY COLORS OVERRIDE */
+.text-primary {
+  color: #3b82f6 !important;
+}
+
+.border-primary {
+  border-color: #3b82f6 !important;
+}
+
+.bg-primary {
+  background-color: #3b82f6 !important;
+}
+
+/* Primary theme token */
+:root {
+  --ui-primary: #3b82f6 !important;
+  --ui-border-accented: #3b82f6 !important;
+}
+
+/* Active sidebar vertical line ONLY */
+aside a.router-link-active::before,
+aside a.router-link-exact-active::before {
+  background-color: #3b82f6 !important;
+}
+
+/* ==========================================================
+   Highlight parent section title (e.g. "Getting Started")
+   when ANY child link in that section is active.
+========================================================== */
+
+/* Parent <li> that contains an active child link */
+aside li[data-slot="itemWithChildren"]:has(a.text-primary) > button,
+aside li[data-slot="itemWithChildren"]:has(a.router-link-active) > button,
+aside li[data-slot="itemWithChildren"]:has(a.router-link-exact-active) > button {
+  color: #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.12);
+  border-radius: 10px;
+}
+
+/* Make the title text bold */
+aside li[data-slot="itemWithChildren"]:has(a.text-primary)
+  > button
+  [data-slot="linkTitle"],
+aside li[data-slot="itemWithChildren"]:has(a.router-link-active)
+  > button
+  [data-slot="linkTitle"],
+aside li[data-slot="itemWithChildren"]:has(a.router-link-exact-active)
+  > button
+  [data-slot="linkTitle"] {
+  font-weight: 700 !important;
+}
+
+/* ==========================================================
+   Custom CSS Chevron
+========================================================== */
+
+/* Add chevron to every collapsible section */
+aside li[data-slot="itemWithChildren"] > button::after {
+  content: "";
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+
+  /* Draw chevron using borders */
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+
+  /* Default = pointing down */
+  transform: rotate(45deg);
+
+  opacity: 0.6;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+/* Open state = pointing up */
+aside li[data-slot="itemWithChildren"] > button[data-state="open"]::after {
+  transform: rotate(-135deg);
+  opacity: 1;
+}
+
+/* Hover state */
+aside li[data-slot="itemWithChildren"] > button:hover::after {
+  opacity: 1;
+}
+
+/* Active section = blue chevron */
+aside li[data-slot="itemWithChildren"]:has(a.text-primary) > button::after,
+aside li[data-slot="itemWithChildren"]:has(a.router-link-active) > button::after,
+aside li[data-slot="itemWithChildren"]:has(a.router-link-exact-active) > button::after {
+  color: #3b82f6;
+  opacity: 1;
+}
+
+/* ==========================================================
+   Sidebar Scrollbar Cleanup
+========================================================== */
+
+aside {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+  overflow-y: auto;
+}
+
+/* Hide scrollbar completely (Chrome/Safari/Edge) */
+aside::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+/* Safety: ensure content still scrolls */
+aside {
+  overflow-y: auto;
+}
+
+/* TOC active item */
+.text-primary {
+  color: #3b82f6 !important;
+}
+
+/* Border accents */
+.border-primary {
+  border-color: #3b82f6 !important;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* SCROLLBAR & TEXT SELECTION STYLING */
+::-webkit-scrollbar {
+  width: 2px;
+  height: 2px;
+}
+
+/* Track (very subtle, almost invisible) */
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 50px;
+  width: 2px;
+  height: 2px;
+}
+
+/* Thumb (primary SkyPort blue) */
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.45);
+  border-radius: 50px;
+  transition: background 0.2s ease;
+  width: 2px;
+  height: 2px;
+}
+
+/* Hover (slightly stronger but still minimal) */
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.75);
+  width: 2px;
+  height: 2px;
+}
+
+/* Dark mode */
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+  width: 2px;
+  height: 2px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.4);
+  width: 2px;
+  height: 2px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.7);
+  width: 2px;
+  height: 2px;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.5) transparent;
+}
+
+/* Selection */
+::selection {
+  background-color: rgba(59, 130, 246, 0.18);
+  color: inherit;
+}
+
+/* Selection */
+::selection {
+  background-color: rgba(59, 130, 246, 0.18);
+  color: inherit;
+}
+
+/* Dark mode selection color */
+.dark ::selection {
+  background-color: #3b82f644;
+  color: #f2f7ff;
+}
