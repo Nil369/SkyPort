@@ -65,6 +65,9 @@ ___
 |---|
 | ![](./assets/screenshots/admin_panel.png) | 
 
+| Skyport CLI 🔥 | Skyport TUI 🧑‍💻|
+|---|---|
+| ![](./assets/screenshots/skyport_cli.png) | ![](./assets/screenshots/skyport_tui.png) |
 ---
 
 ## Tech stack

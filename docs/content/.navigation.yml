@@ -1,0 +1,17 @@
+navigation:
+  - title: Getting Started
+    children:
+      - Introduction
+      - Installation
+      - Quick Start
+      - First Deployment
+      - Troubleshooting
+  - title: Installation
+  - title: Platform
+  - title: CLI
+  - title: TUI
+  - title: Docker
+  - title: PM2
+  - title: VPS
+  - title: Deployment
+  - title: Reference
