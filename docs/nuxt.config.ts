@@ -1,9 +1,12 @@
 //@ts-ignore
+const baseURL = process.env.NUXT_APP_BASE_URL || '/'
+
 export default defineNuxtConfig({
   extends: ['docus'],
   pages: true,
   ssr: true,
   app: {
+    baseURL,
     head: {
       titleTemplate: '%s | SkyPort Docs',
       htmlAttrs: {
@@ -28,7 +31,7 @@ export default defineNuxtConfig({
         },
         {
           property: 'og:image',
-          content: '/logo.png',
+          content: `${baseURL}logo.png`,
         },
         {
           name: 'twitter:card',
@@ -39,7 +42,7 @@ export default defineNuxtConfig({
         {
           rel: 'icon',
           type: 'image/svg+xml',
-          href: '/favicon.svg',
+          href: `${baseURL}favicon.svg`,
         },
         {
           rel: 'stylesheet',
