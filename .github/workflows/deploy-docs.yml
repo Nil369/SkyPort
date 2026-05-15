@@ -49,7 +49,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: docs
-        run: npm ci --prefer-offline --no-audit
+        run: npm i
 
       - name: Build docs
         working-directory: docs
