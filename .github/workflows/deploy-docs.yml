@@ -22,7 +22,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      NUXT_APP_BASE_URL: /SkyPort/
+      # Use root base for custom domain (https://docs.skyport.akashhalder.in/)
+      # Previously set for GitHub Pages repo path; set to '/' for custom domain
+      NUXT_APP_BASE_URL: /
     
     steps:
       - name: Checkout

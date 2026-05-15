@@ -2,8 +2,13 @@
 const appConfig = useAppConfig()
 const site = useSiteConfig()
 const { localePath } = useDocusI18n()
+import { useRuntimeConfig } from '#imports'
 
 const ariaLabel = appConfig.header?.title || site.name
+
+const runtimeConfig = useRuntimeConfig()
+const base = runtimeConfig?.app?.baseURL || '/'
+const logoPath = base.endsWith('/') ? `${base}logo.png` : `${base}/logo.png`
 </script>
 
 <template>
@@ -13,8 +18,8 @@ const ariaLabel = appConfig.header?.title || site.name
     :aria-label="appConfig.header?.title || 'SkyPort'"
   >
     <UColorModeImage
-      light="/logo.png"
-      dark="/logo.png"
+      :light="logoPath"
+      :dark="logoPath"
       alt="SkyPort Logo"
       class="h-10 w-10 shrink-0 rounded-xl"
     />
