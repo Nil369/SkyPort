@@ -54,6 +54,7 @@ export default defineNuxtConfig({
           property: 'og:image:alt',
           content: 'SkyPort - Self-Hosted Developer Infrastructure Platform',
         },
+        // Twitter Tags
         {
           property: 'og:site_name',
           content: 'SkyPort Docs',
