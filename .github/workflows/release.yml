@@ -48,16 +48,28 @@ jobs:
         working-directory: backend
         run: make swag-init
 
+      - name: Resolve build version
+        id: build_version
+        run: |
+          VERSION_TAG=$(git tag --list --sort=-version:refname | head -n 1)
+
+          if [ -z "$VERSION_TAG" ]; then
+            VERSION_TAG="v0.0.0"
+          fi
+
+          VERSION_VALUE=${VERSION_TAG#v}
+          echo "version=$VERSION_VALUE" >> "$GITHUB_OUTPUT"
+
       - name: Cross-compile binaries
         working-directory: backend
         env:
-          VERSION: dev
+          VERSION: ${{ steps.build_version.outputs.version }}
         run: make build-all
 
       - name: Cross-compile CLI binaries
         working-directory: cli
         env:
-          VERSION: dev
+          VERSION: ${{ steps.build_version.outputs.version }}
         run: make build-all
 
       - name: Prepare release assets
