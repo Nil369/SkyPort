@@ -54,6 +54,7 @@ export default defineNuxtConfig({
           property: 'og:image:alt',
           content: 'SkyPort - Self-Hosted Developer Infrastructure Platform',
         },
+        // Twitter Tags
         {
           property: 'og:site_name',
           content: 'SkyPort Docs',
@@ -96,15 +97,20 @@ export default defineNuxtConfig({
           href: 'https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=JetBrains+Mono:wght@100..800&display=swap'
         }
       ],
+      script: [
+        {
+          async: true,
+          src: 'https://www.googletagmanager.com/gtag/js?id=G-YYRT7QKXMJ',
+        },
+        {
+          children: "window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-YYRT7QKXMJ');",
+        },
+      ],
     },
   },
   modules: [
     '@nuxt/ui',
-    'nuxt-gtag'
   ],
-  gtag: {
-    id: 'G-YYRT7QKXM'
-  },
   routeRules: {
     '/': { prerender: true },
   },
