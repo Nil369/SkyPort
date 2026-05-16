@@ -1,6 +1,6 @@
 <script setup lang="ts">
 useSeoMeta({
-  title: 'SkyPort Documentation',
+  title: 'SkyPort Docs',
   description:
     'SkyPort is a self-hosted infrastructure platform for Docker, PM2, VPS, CLI, TUI, and marketplace workflows.',
 })

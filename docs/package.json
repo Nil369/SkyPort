@@ -1,5 +1,5 @@
 {
-  "name": "docs",
+  "name": "SkyPort Docs",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build --preset github_pages"
