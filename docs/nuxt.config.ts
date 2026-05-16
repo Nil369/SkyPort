@@ -98,7 +98,13 @@ export default defineNuxtConfig({
       ],
     },
   },
-  modules: ['@nuxt/ui'],
+  modules: [
+    '@nuxt/ui',
+    'nuxt-gtag'
+  ],
+  gtag: {
+    id: 'G-YYRT7QKXM'
+  },
   routeRules: {
     '/': { prerender: true },
   },

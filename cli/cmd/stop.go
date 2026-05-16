@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -10,21 +10,25 @@ import (
 	"skyport-cli/internal/ui"
 )
 
-func newLogsCommand() *cobra.Command {
+func newStopCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "logs",
-		Short: "Tail the SkyPort backend logs",
+		Use:   "stop",
+		Short: "Stop the SkyPort backend daemon",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			manager, err := daemon.New()
 			if err != nil {
 				return err
 			}
 
-			ctx, cancel := context.WithCancel(cmd.Context())
+			ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
 			defer cancel()
 
-			ui.Infof("Tailing %s", manager.LogsPath())
-			return manager.TailLogs(ctx, os.Stdout)
+			if err := manager.Stop(ctx); err != nil {
+				return err
+			}
+
+			ui.Successf("SkyPort backend stopped")
+			return nil
 		},
 	}
 }
