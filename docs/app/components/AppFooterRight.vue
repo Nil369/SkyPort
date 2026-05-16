@@ -1,6 +1,11 @@
 <script setup lang="ts">
 const socials = [
     {
+        label: 'Website',
+        href: 'https://akashhalder.in',
+        icon: 'i-lucide-globe',
+    },
+    {
         label: 'LinkedIn',
         href: 'https://in.linkedin.com/in/akash-halder-nil?trk=public_profile',
         icon: 'i-lucide-linkedin',

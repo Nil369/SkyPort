@@ -14,7 +14,7 @@ const logoPath = base.endsWith('/') ? `${base}logo.png` : `${base}/logo.png`
 <template>
   <NuxtLink
     :to="localePath('/')"
-    class="mt-3 mb-4 flex items-center gap-3 rounded-2xl  bg-white/80 px-4 py-3  dark:bg-slate-950/70"
+    class="mt-3 mb-4 flex items-center gap-3 rounded-2xl  bg-white/80 px-4 py-3  dark:bg-[#111827]/80"
     :aria-label="appConfig.header?.title || 'SkyPort'"
   >
     <UColorModeImage

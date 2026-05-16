@@ -74,15 +74,16 @@ func init() {
 	rootCmd.AddCommand(newServerCommand())
 	rootCmd.AddCommand(newDeployCommand())
 	rootCmd.AddCommand(newRollbackCommand())
+	rootCmd.AddCommand(newRestartCommand())
 	rootCmd.AddCommand(newLogsCommand())
 	rootCmd.AddCommand(newStatusCommand())
+	rootCmd.AddCommand(newStopCommand())
 	rootCmd.AddCommand(newDockerCommand())
 	rootCmd.AddCommand(newFilesCommand())
 	rootCmd.AddCommand(newMarketplaceCommand())
 	rootCmd.AddCommand(newProjectCommand())
 	rootCmd.AddCommand(newPM2Command())
 	rootCmd.AddCommand(newStartCommand())
-	rootCmd.AddCommand(newTUICommandAlias())
 	rootCmd.AddCommand(newServiceCommand())
 }
 

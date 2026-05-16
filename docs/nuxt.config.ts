@@ -19,23 +19,70 @@ export default defineNuxtConfig({
         },
         {
           name: 'description',
-          content: 'SkyPort Docs for a self-hosted developer infrastructure platform. Learn Docker management, PM2 control, VPS operations, reverse proxy workflows, deployments, and terminal-first automation.',
+          content: 'Deploy, manage, and scale your infrastructure with SkyPort. Self-hosted developer platform with Docker, PM2, VPS control, reverse proxy, and more.',
+        },
+        // Open Graph Tags
+        {
+          property: 'og:type',
+          content: 'website',
+        },
+        {
+          property: 'og:url',
+          content: 'https://docs.skyport.akashhalder.in',
         },
         {
           property: 'og:title',
-          content: 'SkyPort Docs - Self-Hosted Developer Infrastructure Platform',
+          content: 'SkyPort - Self-Hosted Developer Infrastructure Platform',
         },
         {
           property: 'og:description',
-          content: 'Deploy apps, manage Docker, operate VPS infrastructure, and control your entire stack from one platform.',
+          content: 'Deploy, manage, and scale your infrastructure with SkyPort. Self-hosted developer platform with Docker, PM2, VPS control, reverse proxy, and more.',
         },
         {
           property: 'og:image',
-          content: `${baseURL}logo.png`,
+          content: 'https://ik.imagekit.io/AkashPortfolioAssets/skyport_assets/banner.png?updatedAt=1778849231459',
         },
+        {
+          property: 'og:image:width',
+          content: '1200',
+        },
+        {
+          property: 'og:image:height',
+          content: '630',
+        },
+        {
+          property: 'og:image:alt',
+          content: 'SkyPort - Self-Hosted Developer Infrastructure Platform',
+        },
+        {
+          property: 'og:site_name',
+          content: 'SkyPort Docs',
+        },
+        // Twitter Tags
         {
           name: 'twitter:card',
           content: 'summary_large_image',
+        },
+        {
+          name: 'twitter:site',
+          content: '@skyport_dev',
+        },
+        {
+          name: 'twitter:title',
+          content: 'SkyPort - Self-Hosted Developer Infrastructure Platform',
+        },
+        {
+          name: 'twitter:description',
+          content: 'Deploy, manage, and scale your infrastructure with SkyPort. Self-hosted developer platform with Docker, PM2, VPS control, reverse proxy, and more.',
+        },
+        {
+          name: 'twitter:image',
+          content: 'https://ik.imagekit.io/AkashPortfolioAssets/skyport_assets/banner.png?updatedAt=1778849231459',
+        },
+        // Additional Meta Tags
+        {
+          name: 'theme-color',
+          content: '#3b82f6',
         },
       ],
       link: [
@@ -51,7 +98,13 @@ export default defineNuxtConfig({
       ],
     },
   },
-  modules: ['@nuxt/ui'],
+  modules: [
+    '@nuxt/ui',
+    'nuxt-gtag'
+  ],
+  gtag: {
+    id: 'G-YYRT7QKXM'
+  },
   routeRules: {
     '/': { prerender: true },
   },

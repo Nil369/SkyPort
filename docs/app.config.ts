@@ -13,6 +13,10 @@ export default defineAppConfig({
     title: 'SkyPort Docs',
     description: 'Self-Hosted Infrastructure Platform Documentation',
   },
+  header: {
+    // This updates the text in the top-left of the site
+    title: 'SkyPort Docs',
+  },
   docus: {
     title: 'SkyPort Docs',
     description: 'Self-Hosted Infrastructure Platform Documentation',

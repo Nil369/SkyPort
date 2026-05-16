@@ -1,6 +1,6 @@
 <script setup lang="ts">
 useSeoMeta({
-  title: 'SkyPort Documentation',
+  title: 'SkyPort Docs',
   description:
     'SkyPort is a self-hosted infrastructure platform for Docker, PM2, VPS, CLI, TUI, and marketplace workflows.',
 })
@@ -219,6 +219,26 @@ const quickSteps = [
               </div>
             </NuxtLink>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROMOTION BANNER -->
+    <section class="relative mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
+      <div class="rounded-2xl border border-blue-200/40 bg-linear-to-r from-blue-600/10 via-slate-900/5 to-blue-600/10 p-8 sm:p-12 dark:border-blue-900/40 dark:bg-linear-to-r dark:from-blue-600/20 dark:via-slate-900/20 dark:to-blue-600/20 shadow-lg">
+        <p class="text-xs sm:text-sm font-semibold uppercase tracking-[0.24em] text-blue-500 dark:text-blue-400">Built with passion</p>
+        <h2 class="mt-3 text-2xl sm:text-3xl font-semibold text-slate-950 dark:text-white">
+          Build modern developer infrastructure with <span class="text-blue-600 dark:text-blue-400">Akash Halder Technologia</span>!
+        </h2>
+        <p class="mt-3 text-base text-slate-600 dark:text-slate-300">
+          From developer platforms to full-stack SaaS systems — designed for performance, reliability, and rapid iteration.
+        </p>
+        <div class="mt-6">
+          <a href="https://akashhalder.in" target="_blank" rel="noopener noreferrer"
+            class="inline-flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 font-semibold transition">
+            Visit akashhalder.in
+            <UIcon name="i-lucide-arrow-right" class="h-4 w-4" />
+          </a>
         </div>
       </div>
     </section>

@@ -3,30 +3,66 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 
+	"skyport-cli/internal/daemon"
 	"skyport-cli/internal/tui"
 	"skyport-cli/internal/ui"
 )
 
 func newStartCommand() *cobra.Command {
-	cmd := &cobra.Command{Use: "start", Short: "Start SkyPort services"}
+	cmd := &cobra.Command{
+		Use:   "start",
+		Short: "Start the SkyPort backend daemon",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStartDaemon(cmd, daemon.Options{})
+		},
+	}
+	cmd.AddCommand(newStartServerCommand())
 	cmd.AddCommand(newStartWebUICommand())
 	cmd.AddCommand(newStartTUICommand())
 	return cmd
+}
+
+func newStartServerCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:    "server",
+		Short:  "Start the SkyPort backend daemon",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStartDaemon(cmd, daemon.Options{})
+		},
+	}
+}
+
+func runStartDaemon(cmd *cobra.Command, opts daemon.Options) error {
+	manager, err := daemon.NewWithOptions(opts)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), 15*time.Second)
+	defer cancel()
+
+	pid, err := manager.Start(ctx)
+	if err != nil {
+		var already *daemon.AlreadyRunningError
+		if errors.As(err, &already) {
+			return printDaemonSummary(cmd, manager)
+		}
+		return err
+	}
+
+	ui.Successf("SkyPort backend started")
+	ui.Successf("Web UI: %s", manager.WebURL())
+	ui.Successf("PID: %d", pid)
+	return nil
 }
 
 func newStartWebUICommand() *cobra.Command {
@@ -38,199 +74,38 @@ func newStartWebUICommand() *cobra.Command {
 		Use:   "webui",
 		Short: "Start or open the embedded SkyPort web UI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if port <= 0 {
-				port = 8080
-			}
-			bindHost, probeURL, displayURL := webUIEndpoints(strings.TrimSpace(host), port)
-			if healthy(probeURL) {
-				ui.Successf("SkyPort web UI is already running at %s", displayURL)
-				if browser {
-					return openBrowser(displayURL)
-				}
-				return nil
-			}
-
-			exe, err := resolveBackendBinary(binaryPath)
+			manager, err := daemon.NewWithOptions(daemon.Options{
+				BinaryPath: strings.TrimSpace(binaryPath),
+				Host:       strings.TrimSpace(host),
+				Port:       port,
+			})
 			if err != nil {
 				return err
 			}
 
-			spinner, _ := pterm.DefaultSpinner.Start("Starting SkyPort web UI")
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			ctx, cancel := context.WithTimeout(cmd.Context(), 90*time.Second)
 			defer cancel()
-			cmdExec := exec.CommandContext(ctx, exe)
-			cmdExec.Env = append(os.Environ(),
-				"SKYPORT_HOST="+bindHost,
-				fmt.Sprintf("SKYPORT_PORT=%d", port),
-			)
-			cmdExec.Dir = filepath.Dir(exe)
-			stdout, _ := cmdExec.StdoutPipe()
-			stderr, _ := cmdExec.StderrPipe()
-			if err := cmdExec.Start(); err != nil {
-				spinner.Fail(err.Error())
+
+			if err := manager.EnsureRunning(ctx); err != nil {
 				return err
 			}
-			go func() { _, _ = io.Copy(os.Stdout, stdout) }()
-			go func() { _, _ = io.Copy(os.Stderr, stderr) }()
-			if err := waitForHealth(probeURL, 45*time.Second); err != nil {
-				spinner.Fail(err.Error())
+			if err := manager.WaitForHealthy(ctx, 45*time.Second); err != nil {
 				return err
 			}
-			spinner.Success("SkyPort web UI ready")
-			ui.Successf("Web UI available at %s", displayURL)
+
+			ui.Successf("SkyPort backend ready")
+			ui.Successf("Web UI available at %s", manager.WebURL())
 			if browser {
-				return openBrowser(displayURL)
+				return openBrowser(manager.WebURL())
 			}
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&host, "host", "", "HTTP bind address (empty: Windows/macOS use loopback + http://localhost; Linux uses 0.0.0.0 + LAN IP in messages)")
-	cmd.Flags().IntVar(&port, "port", 8080, "local port")
+	cmd.Flags().StringVar(&host, "host", "", "HTTP bind address for the backend daemon")
+	cmd.Flags().IntVar(&port, "port", 8080, "backend port")
 	cmd.Flags().StringVar(&binaryPath, "binary", "", "path to the SkyPort backend binary")
 	cmd.Flags().BoolVar(&browser, "browser", true, "open the browser once ready")
 	return cmd
-}
-
-func resolveBackendBinary(explicit string) (string, error) {
-	if strings.TrimSpace(explicit) != "" {
-		if abs, err := filepath.Abs(explicit); err == nil {
-			if _, err := os.Stat(abs); err == nil {
-				return abs, nil
-			}
-		}
-		return "", fmt.Errorf("backend binary not found at %s", explicit)
-	}
-	for _, name := range []string{"skyport-server", "skyport-backend", "skyport-server.exe", "skyport-backend.exe"} {
-		if path, err := exec.LookPath(name); err == nil {
-			return path, nil
-		}
-	}
-	candidates := []string{}
-	if runtime.GOOS == "windows" {
-		candidates = append(candidates,
-			`..\backend\bin\windows-amd64\skyport.exe`,
-			`..\backend\bin\windows-amd64\skyport-server.exe`,
-			`..\bin\server\windows-amd64\skyport-server.exe`,
-			`..\bin\windows-amd64\skyport.exe`,
-			`..\bin\windows-amd64\skyport-server.exe`,
-		)
-	} else {
-		candidates = append(candidates,
-			"../backend/bin/linux-amd64/skyport",
-			"../backend/bin/linux-amd64/skyport-server",
-			"../bin/server/linux-amd64/skyport-server",
-			"../bin/linux-amd64/skyport",
-			"../bin/linux-amd64/skyport-server",
-		)
-	}
-	for _, candidate := range candidates {
-		abs, err := filepath.Abs(candidate)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(abs); err == nil {
-			return abs, nil
-		}
-	}
-	return "", errors.New("no embedded-webui backend binary found; build the backend or pass --binary")
-}
-
-// webUIEndpoints returns SKYPORT_HOST bind address, URL for /api/v1/health checks, and URL to show or open in the browser.
-func webUIEndpoints(host string, port int) (bindHost, probeURL, displayURL string) {
-	ps := fmt.Sprintf("%d", port)
-	if host == "" {
-		if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-			bindHost = "127.0.0.1"
-			probeURL = "http://127.0.0.1:" + ps
-			displayURL = "http://localhost:" + ps
-			return
-		}
-		bindHost = "0.0.0.0"
-		probeURL = "http://127.0.0.1:" + ps
-		if pub, ok := firstPublicIPv4(); ok {
-			displayURL = "http://" + pub + ":" + ps
-		} else {
-			displayURL = probeURL
-		}
-		return
-	}
-	bindHost = host
-	switch {
-	case host == "0.0.0.0":
-		probeURL = "http://127.0.0.1:" + ps
-		if pub, ok := firstPublicIPv4(); ok {
-			displayURL = "http://" + pub + ":" + ps
-		} else {
-			displayURL = probeURL
-		}
-	case host == "127.0.0.1" || strings.EqualFold(host, "localhost"):
-		probeURL = "http://127.0.0.1:" + ps
-		if runtime.GOOS == "windows" {
-			displayURL = "http://localhost:" + ps
-		} else if strings.EqualFold(host, "localhost") {
-			displayURL = "http://localhost:" + ps
-		} else {
-			displayURL = "http://127.0.0.1:" + ps
-		}
-	default:
-		probeURL = "http://" + host + ":" + ps
-		displayURL = probeURL
-	}
-	return
-}
-
-func firstPublicIPv4() (string, bool) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "", false
-	}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			ipnet, ok := a.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			ip := ipnet.IP.To4()
-			if ip == nil || ip.IsLoopback() {
-				continue
-			}
-			return ip.String(), true
-		}
-	}
-	return "", false
-}
-
-func healthy(baseURL string) bool {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/v1/health", nil)
-	if err != nil {
-		return false
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
-}
-
-func waitForHealth(baseURL string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		if healthy(baseURL) {
-			return nil
-		}
-		time.Sleep(750 * time.Millisecond)
-	}
-	return fmt.Errorf("web ui did not become ready at %s", baseURL)
 }
 
 func openBrowser(target string) error {
@@ -242,6 +117,27 @@ func openBrowser(target string) error {
 	default:
 		return exec.Command("xdg-open", target).Start()
 	}
+}
+
+func printDaemonSummary(cmd *cobra.Command, manager *daemon.Manager) error {
+	ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Second)
+	defer cancel()
+	status, err := manager.Status(ctx)
+	if err != nil {
+		return err
+	}
+	if !status.Running {
+		ui.Warnf("SkyPort backend is not running")
+		return nil
+	}
+	ui.Successf("SkyPort backend already running")
+	ui.Successf("Web UI: %s", status.WebURL)
+	if status.PID > 0 {
+		ui.Successf("PID: %d", status.PID)
+	} else {
+		ui.Successf("PID: unknown")
+	}
+	return nil
 }
 
 func newStartTUICommand() *cobra.Command {
@@ -260,13 +156,11 @@ func newStartTUICommand() *cobra.Command {
 				serverName = app.Profile.BaseURL
 			}
 
-			// Build the TUI model with initialized state
 			tuiModel, err := tui.New(context.Background(), nil, app.Client, serverName)
 			if err != nil {
 				return err
 			}
 
-			// Run TUI
 			if _, err := tea.NewProgram(tuiModel, tea.WithAltScreen()).Run(); err != nil {
 				return err
 			}
@@ -274,20 +168,4 @@ func newStartTUICommand() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func newTUICommandAlias() *cobra.Command {
-	return &cobra.Command{
-		Use:   "tui",
-		Short: "Alias for 'skyport start tui'",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return newStartTUICommand().RunE(cmd, args)
-		},
-	}
-}
-
-func launchTUI(ctx context.Context, app *App) (interface{}, error) {
-	// This will be implemented when the TUI module is fully integrated
-	ui.Infof("TUI mode not yet fully implemented. Use 'skyport start webui' for the browser-based UI")
-	return nil, nil
 }
