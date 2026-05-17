@@ -8,6 +8,7 @@ set -Eeuo pipefail
 #   - skyport-server
 #   - skyport CLI
 #   - systemd service (Linux)
+#   - launchd service (macOS)
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Nil369/SkyPort/main/installer/install.sh | sudo bash
@@ -17,11 +18,6 @@ set -Eeuo pipefail
 #   SKYPORT_VERSION="latest"
 #   SKYPORT_PORT="8080"
 #   SKYPORT_HOST="0.0.0.0"
-
-# Run this Command for WSL: sed -i 's/\r//g' install.sh
-# Make the script executable: chmod +x install.sh
-# Then run the script: sudo ./install.sh
-# Use: sudo skyport start webui to start the server, and access it at your_serverip:port (default 8080)
 
 # =========================================================
 # CONFIG
@@ -33,11 +29,18 @@ SKYPORT_VERSION="${SKYPORT_VERSION:-latest}"
 SKYPORT_HOST="${SKYPORT_HOST:-0.0.0.0}"
 SKYPORT_PORT="${SKYPORT_PORT:-8080}"
 
-INSTALL_DIR="/opt/skyport"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+if [ "$OS" = "darwin" ]; then
+  INSTALL_DIR="/usr/local/skyport"
+  CONFIG_DIR="/usr/local/etc/skyport"
+else
+  INSTALL_DIR="/opt/skyport"
+  CONFIG_DIR="/etc/skyport"
+fi
+
 DATA_DIR="${INSTALL_DIR}/data"
 WORKSPACE_DIR="${INSTALL_DIR}/workspace"
-
-CONFIG_DIR="/etc/skyport"
 
 SERVER_BIN="/usr/local/bin/skyport-server"
 CLI_BIN="/usr/local/bin/skyport"
@@ -45,6 +48,7 @@ CLI_BIN="/usr/local/bin/skyport"
 ENV_FILE="${CONFIG_DIR}/skyport.env"
 
 SERVICE_FILE="/etc/systemd/system/skyport.service"
+LAUNCHD_FILE="/Library/LaunchDaemons/in.skyport.server.plist"
 
 # =========================================================
 # HELPERS
@@ -139,6 +143,11 @@ cli_url() {
 # =========================================================
 
 create_user() {
+
+  if [ "$(detect_os)" = "darwin" ]; then
+    return
+  fi
+
   if id -u skyport >/dev/null 2>&1; then
     return
   fi
@@ -162,7 +171,9 @@ create_directories() {
   mkdir -p "${WORKSPACE_DIR}"
   mkdir -p "${CONFIG_DIR}"
 
-  chown -R skyport:skyport "${INSTALL_DIR}" || true
+  if [ "$(detect_os)" = "linux" ]; then
+    chown -R skyport:skyport "${INSTALL_DIR}" || true
+  fi
 }
 
 # =========================================================
@@ -174,6 +185,7 @@ generate_secret() {
 }
 
 write_env() {
+
   local jwt_secret
   jwt_secret="$(generate_secret)"
 
@@ -208,6 +220,7 @@ EOF
 # =========================================================
 
 install_server() {
+
   local version="$1"
   local os="$2"
   local arch="$3"
@@ -224,6 +237,7 @@ install_server() {
 }
 
 install_cli() {
+
   local version="$1"
   local os="$2"
   local arch="$3"
@@ -240,7 +254,7 @@ install_cli() {
 }
 
 # =========================================================
-# SYSTEMD
+# SYSTEMD (LINUX)
 # =========================================================
 
 install_systemd_service() {
@@ -274,6 +288,97 @@ EOF
   systemctl daemon-reload
   systemctl enable skyport
   systemctl restart skyport
+
+  log "systemd service installed."
+}
+
+# =========================================================
+# LAUNCHD (MACOS)
+# =========================================================
+
+install_launchd_service() {
+
+cat > "${LAUNCHD_FILE}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <key>Label</key>
+  <string>in.skyport.server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>${SERVER_BIN}</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>${INSTALL_DIR}</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SKYPORT_HOST</key>
+    <string>${SKYPORT_HOST}</string>
+
+    <key>SKYPORT_PORT</key>
+    <string>${SKYPORT_PORT}</string>
+
+    <key>SKYPORT_ENV</key>
+    <string>production</string>
+
+    <key>SKYPORT_LOG_LEVEL</key>
+    <string>info</string>
+
+    <key>SKYPORT_DB_PATH</key>
+    <string>${DATA_DIR}/skyport.db</string>
+
+    <key>SKYPORT_WORKSPACE_ROOT</key>
+    <string>${WORKSPACE_DIR}</string>
+
+    <key>JWT_SECRET</key>
+    <string>$(generate_secret)</string>
+
+    <key>JWT_EXPIRES</key>
+    <string>604800</string>
+
+    <key>ENABLE_TERMINAL</key>
+    <string>true</string>
+
+    <key>ENABLE_DOCKER</key>
+    <string>true</string>
+
+    <key>ENABLE_PROJECTS</key>
+    <string>true</string>
+
+    <key>ENABLE_METRICS</key>
+    <string>true</string>
+
+    <key>ENABLE_FILESYSTEM</key>
+    <string>true</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/var/log/skyport.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/var/log/skyport-error.log</string>
+
+</dict>
+</plist>
+EOF
+
+  chmod 644 "${LAUNCHD_FILE}"
+
+  launchctl unload "${LAUNCHD_FILE}" >/dev/null 2>&1 || true
+  launchctl load "${LAUNCHD_FILE}"
+
+  log "launchd service installed."
 }
 
 # =========================================================
@@ -282,12 +387,17 @@ EOF
 
 primary_ip() {
 
-  if command -v hostname >/dev/null 2>&1; then
-    hostname -I 2>/dev/null | awk '{print $1}'
+  local os
+  os="$(detect_os)"
+
+  if [ "$os" = "darwin" ]; then
+    ipconfig getifaddr en0 2>/dev/null \
+      || ipconfig getifaddr en1 2>/dev/null \
+      || echo "localhost"
     return
   fi
 
-  echo "localhost"
+  hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
 }
 
 # =========================================================
@@ -334,6 +444,10 @@ main() {
     install_systemd_service
   fi
 
+  if [ "${os}" = "darwin" ]; then
+    install_launchd_service
+  fi
+
   local ip
   ip="$(primary_ip)"
 
@@ -361,7 +475,15 @@ main() {
   echo "  skyport projects"
   echo
   echo "Service Status:"
-  echo "  systemctl status skyport"
+
+  if [ "${os}" = "linux" ]; then
+    echo "  systemctl status skyport"
+  fi
+
+  if [ "${os}" = "darwin" ]; then
+    echo "  launchctl list | grep skyport"
+  fi
+
   echo
 }
 

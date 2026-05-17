@@ -3,10 +3,12 @@ import { TopBar } from "@/components/layout/TopBar";
 import { AnimatedOutlet } from "@/components/layout/AnimatedOutlet";
 import { WebSocketStatusBanner } from "@/components/layout/WebSocketStatusBanner";
 import { UpdateNotification } from "@/features/platform/components/UpdateNotification";
+import { DashboardTour } from "@/components/onboarding/dashboard-tour";
 
 export function AppShellLayout() {
   return (
     <div className="min-h-dvh bg-background text-foreground">
+      <DashboardTour />
       <div className="flex">
         <Sidebar />
         <div className="flex min-h-dvh flex-1 flex-col">

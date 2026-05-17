@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   EllipsisVertical,
   Layers3,
+  Sparkles,
 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -35,6 +36,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { authApi } from "@/features/auth/api";
 import { PERMS, can } from "@/lib/permissions";
 import { env } from "@/app/env";
+import { useOnboardingTour } from "@/hooks/useOnboardingTour";
 
 type NavItem = { to: string; label: string; icon: React.ComponentType<{ className?: string }>; need?: string };
 
@@ -61,6 +63,7 @@ export function Sidebar() {
   const logoutLocal = useAuthStore((s) => s.logoutLocal);
   const navigate = useNavigate();
   const [actionsOpen, setActionsOpen] = React.useState(false);
+  const { resetAndRestartTour } = useOnboardingTour();
 
   const logout = useMutation({
     mutationFn: authApi.logout,
@@ -124,30 +127,44 @@ export function Sidebar() {
         </div>
       </div>
       <Separator className="opacity-60" />
-      <nav className="p-2">
+      <nav className="p-2" data-tour="sidebar">
         <ul className="space-y-1">
           {items
             .filter((it) => !it.need || can(user?.permissions, it.need))
-            .map(({ to, label, icon: Icon }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                    "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive &&
-  "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_0_1px_color-mix(in_oklab,var(--sidebar-border),transparent_40%)] " + 
-  "hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
-                    collapsed && "justify-center px-2"
-                  )
-                }
-              >
-                <Icon className="size-4" />
-                <span className={cn(collapsed && "hidden")}>{label}</span>
-              </NavLink>
-            </li>
-          ))}
+            .map(({ to, label, icon: Icon }) => {
+              const getTourAttribute = (path: string) => {
+                if (path === "/projects") return "projects";
+                if (path === "/deployments") return "deployments";
+                if (path === "/files") return "files";
+                if (path === "/docker") return "docker";
+                if (path === "/terminal") return "terminal";
+                if (path === "/process-manager") return "process-manager";
+                if (path === "/marketplace") return "marketplace";
+                return undefined;
+              };
+
+              return (
+              <li key={to}>
+                <NavLink
+                  to={to}
+                  data-tour={getTourAttribute(to)}
+                  className={({ isActive }) =>
+                    cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                      "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      isActive &&
+                      "font-semibold bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_0_1px_color-mix(in_oklab,var(--sidebar-border),transparent_40%)] " +
+                      "hover:bg-sidebar-primary hover:text-sidebar-primary-foreground",
+                      collapsed && "justify-center px-2"
+                    )
+                  }
+                >
+                  <Icon className="size-4" />
+                  <span className={cn(collapsed && "hidden")}>{label}</span>
+                </NavLink>
+              </li>
+            );
+            })}
         </ul>
       </nav>
 
@@ -155,6 +172,7 @@ export function Sidebar() {
         <div className="relative mb-2">
           <button
             type="button"
+            data-tour="profile-menu"
             onClick={() => setActionsOpen((state) => !state)}
             className={cn(
               "group w-full rounded-2xl border border-white/10 bg-linear-to-br from-slate-900 via-slate-800 to-slate-950 p-3 text-left shadow-[0_10px_35px_rgba(15,23,42,0.35)] transition-transform hover:-translate-y-0.5",
@@ -184,7 +202,7 @@ export function Sidebar() {
                   </div>
                 </div>
                 <div className="rounded-full border border-blue-400/30 bg-blue-500/15 px-3 py-0.5 max-w-22 my-1 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
-                    {role}
+                  {role}
                 </div>
               </div>
               <span className={cn("self-center text-white/80", collapsed && "hidden")}>
@@ -195,6 +213,16 @@ export function Sidebar() {
 
           {actionsOpen && !collapsed ? (
             <div className="absolute bottom-[calc(100%+0.5rem)] left-0 right-0 z-20 rounded-2xl border border-border/80 bg-background/95 p-2 shadow-2xl backdrop-blur">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-blue-600 transition-colors hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
+                onClick={() => {
+                  setActionsOpen(false);
+                  resetAndRestartTour();
+                }}
+              >
+                <Sparkles className="size-4" /> Start Tour
+              </button>
               <NavLink to="/profile" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted" onClick={() => setActionsOpen(false)}>
                 <Layers3 className="size-4" /> View Profile
               </NavLink>

@@ -40,7 +40,7 @@ export default defineNuxtConfig({
         },
         {
           property: 'og:image',
-          content: 'https://ik.imagekit.io/AkashPortfolioAssets/skyport_assets/banner.png?updatedAt=1778849231459',
+          content: 'https://ik.imagekit.io/AkashPortfolioAssets/skyport_assets/skyport_docs_og.png',
         },
         {
           property: 'og:image:width',
