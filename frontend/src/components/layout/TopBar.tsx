@@ -91,7 +91,7 @@ export function TopBar({ className }: { className?: string }) {
     >
       <div className="flex items-center gap-3 px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex items-center justify-center" data-tour="realtime">
             <span className={cn("absolute size-2.5 rounded-full", statusDot(ws), connected && "animate-ping opacity-70")} />
             <span className={cn("relative size-2 rounded-full", statusDot(ws), connected && "shadow-[0_0_8px_rgba(16,185,129,0.95)]")} />
           </div>
@@ -105,7 +105,7 @@ export function TopBar({ className }: { className?: string }) {
           </div>
         </div>
 
-        <Card className="flex-1 px-3 py-1.5 bg-card/60 border-border/60">
+        <Card className="flex-1 px-3 py-1.5 bg-card/60 border-border/60" data-tour="search">
           <div className="flex items-center gap-2">
             <Search className="size-4 text-muted-foreground" />
             <Input

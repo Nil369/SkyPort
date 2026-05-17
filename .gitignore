@@ -153,8 +153,5 @@ backend/cmd/server/resource.syso
 release/
 reference/
 /*reference/
-assets/*
-!assets/logo.ico
-!assets/screenshots
 artifacts/
 stop

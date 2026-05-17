@@ -1,74 +1,211 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-# SkyPort uninstaller (backend service).
+#
+# SkyPort Universal Uninstaller
+#
+# Removes:
+#   - skyport-server
+#   - skyport CLI
+#   - systemd service (Linux)
+#   - launchd service (macOS)
 #
 # Usage:
-#   curl -fsSL https://skyport.akashhalder.in/uninstall.sh | bash
+#   curl -fsSL https://skyport.akashhalder.in/uninstall.sh | sudo bash
 #
-# Notes:
-# - This removes the backend service + binary + config.
-# - Data directory (/opt/skyport) is removed ONLY when SKYPORT_PURGE_DATA=1.
+# Optional:
+#   SKYPORT_PURGE_DATA=1
+#
+
+# =========================================================
+# CONFIG
+# =========================================================
 
 SKYPORT_PURGE_DATA="${SKYPORT_PURGE_DATA:-0}"
 
-INSTALL_DIR="/opt/skyport"
-SERVER_BIN="${SERVER_BIN:-/usr/local/bin/skyport-server}"
-CLI_BIN="${CLI_BIN:-/usr/local/bin/skyport}"
-ENV_PATH="/etc/skyport/skyport.env"
-SERVICE_PATH="/etc/systemd/system/skyport.service"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 
-log() { echo "[skyport] $*"; }
-die() { echo "[skyport] ERROR: $*" >&2; exit 1; }
+if [ "$OS" = "darwin" ]; then
+  INSTALL_DIR="/usr/local/skyport"
+  CONFIG_DIR="/usr/local/etc/skyport"
+else
+  INSTALL_DIR="/opt/skyport"
+  CONFIG_DIR="/etc/skyport"
+fi
 
-ensure_root() {
-  if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-    die "please run as root (or use: curl ... | sudo bash)"
+SERVER_BIN="/usr/local/bin/skyport-server"
+CLI_BIN="/usr/local/bin/skyport"
+
+ENV_FILE="${CONFIG_DIR}/skyport.env"
+
+SERVICE_FILE="/etc/systemd/system/skyport.service"
+
+LAUNCHD_FILE="/Library/LaunchDaemons/in.skyport.server.plist"
+
+# =========================================================
+# HELPERS
+# =========================================================
+
+log() {
+  echo "[skyport] $*"
+}
+
+error() {
+  echo "[skyport] ERROR: $*" >&2
+  exit 1
+}
+
+require_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    error "Please run as root or use sudo."
   fi
 }
 
-main() {
-  ensure_root
+detect_os() {
+  case "$OS" in
+    linux)
+      echo "linux"
+      ;;
+    darwin)
+      echo "darwin"
+      ;;
+    *)
+      error "Unsupported OS: $OS"
+      ;;
+  esac
+}
+
+# =========================================================
+# LINUX CLEANUP
+# =========================================================
+
+remove_systemd_service() {
 
   if command -v systemctl >/dev/null 2>&1; then
+
     if systemctl list-unit-files | grep -q '^skyport\.service'; then
-      log "stopping service"
-      systemctl disable --now skyport || true
+
+      log "Stopping systemd service..."
+
+      systemctl disable --now skyport >/dev/null 2>&1 || true
+
       systemctl daemon-reload || true
     fi
   fi
 
-  if [ -f "${SERVICE_PATH}" ]; then
-    rm -f "${SERVICE_PATH}"
+  rm -f "${SERVICE_FILE}" || true
+}
+
+# =========================================================
+# MACOS CLEANUP
+# =========================================================
+
+remove_launchd_service() {
+
+  if [ -f "${LAUNCHD_FILE}" ]; then
+
+    log "Stopping launchd service..."
+
+    launchctl unload "${LAUNCHD_FILE}" >/dev/null 2>&1 || true
+
+    rm -f "${LAUNCHD_FILE}" || true
   fi
 
-  if [ -f "${SERVER_BIN}" ]; then
-    rm -f "${SERVER_BIN}"
-  fi
-  if [ -f "${CLI_BIN}" ]; then
-    rm -f "${CLI_BIN}"
-  fi
-  # Legacy single-binary installs
-  if [ -f "/usr/local/bin/skyport" ]; then
-    rm -f "/usr/local/bin/skyport"
-  fi
+  rm -f /var/log/skyport.log || true
+  rm -f /var/log/skyport-error.log || true
+}
 
-  if [ -f "${ENV_PATH}" ]; then
-    rm -f "${ENV_PATH}"
-  fi
+# =========================================================
+# REMOVE FILES
+# =========================================================
 
-  if [ -d "$(dirname "${ENV_PATH}")" ]; then
-    rmdir "$(dirname "${ENV_PATH}")" 2>/dev/null || true
-  fi
+remove_binaries() {
 
-  if [ "${SKYPORT_PURGE_DATA}" = "1" ] && [ -d "${INSTALL_DIR}" ]; then
-    log "purging data at ${INSTALL_DIR}"
-    rm -rf "${INSTALL_DIR}"
+  log "Removing binaries..."
+
+  rm -f "${SERVER_BIN}" || true
+  rm -f "${CLI_BIN}" || true
+}
+
+remove_config() {
+
+  log "Removing configuration..."
+
+  rm -f "${ENV_FILE}" || true
+
+  rmdir "${CONFIG_DIR}" >/dev/null 2>&1 || true
+}
+
+remove_data() {
+
+  if [ "${SKYPORT_PURGE_DATA}" = "1" ]; then
+
+    log "Purging data directory..."
+
+    rm -rf "${INSTALL_DIR}" || true
+
   else
-    log "keeping data at ${INSTALL_DIR} (set SKYPORT_PURGE_DATA=1 to remove)"
+
+    log "Keeping data directory:"
+    log "  ${INSTALL_DIR}"
+    log ""
+    log "Set SKYPORT_PURGE_DATA=1 to remove it."
+  fi
+}
+
+remove_user() {
+
+  if [ "$(detect_os)" = "linux" ]; then
+
+    if id -u skyport >/dev/null 2>&1; then
+
+      log "Removing skyport user..."
+
+      userdel skyport >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
+# =========================================================
+# MAIN
+# =========================================================
+
+main() {
+
+  require_root
+
+  local os
+  os="$(detect_os)"
+
+  log "Detected OS: ${os}"
+
+  if [ "${os}" = "linux" ]; then
+    remove_systemd_service
   fi
 
-  log "uninstall complete"
+  if [ "${os}" = "darwin" ]; then
+    remove_launchd_service
+  fi
+
+  remove_binaries
+
+  remove_config
+
+  remove_data
+
+  remove_user
+
+  echo
+  echo "===================================================="
+  echo " SkyPort Uninstalled Successfully"
+  echo "===================================================="
+  echo
+
+  if [ "${SKYPORT_PURGE_DATA}" != "1" ]; then
+    echo "Data directory preserved:"
+    echo "  ${INSTALL_DIR}"
+    echo
+  fi
 }
 
 main "$@"
