@@ -51,7 +51,7 @@ jobs:
       - name: Resolve next release version
         id: build_version
         run: |
-          NEXT_VERSION=$(npx semantic-release --dry-run --no-ci --debug 2>&1 | sed -n 's/.*The next release version is \(.*\)$/\1/p' | tail -n 1)
+          NEXT_VERSION=$(npx semantic-release --dry-run --no-ci 2>&1 | sed -n 's/.*The next release version is \(.*\)$/\1/p' | tail -n 1)
 
           if [ -z "$NEXT_VERSION" ]; then
             VERSION_TAG=$(git tag --list --sort=-version:refname | head -n 1)
@@ -65,7 +65,7 @@ jobs:
 
           echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Cross-compile binaries
+      - name: Cross-compile server binaries
         working-directory: backend
         env:
           VERSION: ${{ steps.build_version.outputs.version }}
@@ -79,23 +79,23 @@ jobs:
 
       - name: Prepare release assets
         run: |
-          cp bin/server/linux-amd64/skyport-server bin/skyport-server-linux-amd64
-          cp bin/server/linux-arm64/skyport-server bin/skyport-server-linux-arm64
-          cp bin/server/darwin-amd64/skyport-server bin/skyport-server-darwin-amd64
-          cp bin/server/darwin-arm64/skyport-server bin/skyport-server-darwin-arm64
-          cp bin/server/windows-amd64/skyport-server.exe bin/skyport-server-windows-amd64.exe
-          cp bin/cli/linux-amd64/skyport bin/skyport-linux-amd64
-          cp bin/cli/linux-arm64/skyport bin/skyport-linux-arm64
-          cp bin/cli/darwin-amd64/skyport bin/skyport-darwin-amd64
-          cp bin/cli/darwin-arm64/skyport bin/skyport-darwin-arm64
-          cp bin/cli/windows-amd64/skyport.exe bin/skyport-windows-amd64.exe
+          mkdir -p release-assets
+
+          # Server binaries
+          cp bin/server/linux-amd64/skyport-server release-assets/skyport-server-linux-amd64
+          cp bin/server/linux-arm64/skyport-server release-assets/skyport-server-linux-arm64
+          cp bin/server/darwin-amd64/skyport-server release-assets/skyport-server-darwin-amd64
+          cp bin/server/darwin-arm64/skyport-server release-assets/skyport-server-darwin-arm64
+          cp bin/server/windows-amd64/skyport-server.exe release-assets/skyport-server-windows-amd64.exe
+
+          # CLI binaries
+          cp bin/cli/linux-amd64/skyport release-assets/skyport-cli-linux-amd64
+          cp bin/cli/linux-arm64/skyport release-assets/skyport-cli-linux-arm64
+          cp bin/cli/darwin-amd64/skyport release-assets/skyport-cli-darwin-amd64
+          cp bin/cli/darwin-arm64/skyport release-assets/skyport-cli-darwin-arm64
+          cp bin/cli/windows-amd64/skyport.exe release-assets/skyport-cli-windows-amd64.exe
 
       - name: Semantic Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
-      - name: Semantic Release (dry-run debug)
-        if: ${{ always() }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release --no-ci --dry-run --debug || true
