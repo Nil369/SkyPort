@@ -81,19 +81,25 @@ jobs:
         run: |
           mkdir -p release-assets
 
-          # Server binaries
+          # =========================================
+          # SERVER BINARIES
+          # =========================================
+
           cp bin/server/linux-amd64/skyport-server release-assets/skyport-server-linux-amd64
           cp bin/server/linux-arm64/skyport-server release-assets/skyport-server-linux-arm64
           cp bin/server/darwin-amd64/skyport-server release-assets/skyport-server-darwin-amd64
           cp bin/server/darwin-arm64/skyport-server release-assets/skyport-server-darwin-arm64
           cp bin/server/windows-amd64/skyport-server.exe release-assets/skyport-server-windows-amd64.exe
 
-          # CLI binaries
-          cp bin/cli/linux-amd64/skyport release-assets/skyport-cli-linux-amd64
-          cp bin/cli/linux-arm64/skyport release-assets/skyport-cli-linux-arm64
-          cp bin/cli/darwin-amd64/skyport release-assets/skyport-cli-darwin-amd64
-          cp bin/cli/darwin-arm64/skyport release-assets/skyport-cli-darwin-arm64
-          cp bin/cli/windows-amd64/skyport.exe release-assets/skyport-cli-windows-amd64.exe
+          # =========================================
+          # CLI BINARIES
+          # =========================================
+
+          cp bin/cli/linux-amd64/skyport release-assets/skyport-linux-amd64
+          cp bin/cli/linux-arm64/skyport release-assets/skyport-linux-arm64
+          cp bin/cli/darwin-amd64/skyport release-assets/skyport-darwin-amd64
+          cp bin/cli/darwin-arm64/skyport release-assets/skyport-darwin-arm64
+          cp bin/cli/windows-amd64/skyport.exe release-assets/skyport-windows-amd64.exe
 
       - name: Semantic Release
         env:

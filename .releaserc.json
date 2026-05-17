@@ -1,5 +1,7 @@
 {
-  "branches": ["main"],
+  "branches": [
+    "main"
+  ],
   "tagFormat": "v${version}",
   "plugins": [
     [
@@ -7,15 +9,39 @@
       {
         "preset": "angular",
         "releaseRules": [
-          { "type": "feat", "release": "minor" },
-          { "type": "fix", "release": "patch" },
-          { "type": "perf", "release": "patch" },
-          { "type": "docs", "release": "patch" },
-          { "type": "chore", "release": "patch" },
-          { "type": "refactor", "release": "patch" },
-          { "type": "ci", "release": "patch" },
-          { "type": "build", "release": "patch" },
-          { "scope": "release", "type": "chore", "release": "patch" }
+          {
+            "type": "feat",
+            "release": "minor"
+          },
+          {
+            "type": "fix",
+            "release": "patch"
+          },
+          {
+            "type": "perf",
+            "release": "patch"
+          },
+          {
+            "type": "docs",
+            "release": "patch"
+          },
+          {
+            "type": "refactor",
+            "release": "patch"
+          },
+          {
+            "type": "build",
+            "release": "patch"
+          },
+          {
+            "type": "ci",
+            "release": "patch"
+          },
+          {
+            "scope": "release",
+            "type": "chore",
+            "release": "patch"
+          }
         ]
       }
     ],
@@ -31,44 +57,44 @@
       {
         "assets": [
           {
-            "path": "release-assets/skyport-server-linux-amd64",
-            "label": "Linux AMD64"
-          },
-          {
-            "path": "release-assets/skyport-server-linux-arm64",
-            "label": "Linux ARM64"
-          },
-          {
-            "path": "release-assets/skyport-server-darwin-amd64",
-            "label": "macOS Intel"
-          },
-          {
-            "path": "release-assets/skyport-server-darwin-arm64",
-            "label": "macOS Apple Silicon"
-          },
-          {
-            "path": "release-assets/skyport-server-windows-amd64.exe",
-            "label": "Windows AMD64"
-          },
-          {
-            "path": "release-assets/skyport-cli-linux-amd64",
+            "path": "release-assets/skyport-linux-amd64",
             "label": "SkyPort CLI Linux AMD64"
           },
           {
-            "path": "release-assets/skyport-cli-linux-arm64",
+            "path": "release-assets/skyport-linux-arm64",
             "label": "SkyPort CLI Linux ARM64"
           },
           {
-            "path": "release-assets/skyport-cli-darwin-amd64",
+            "path": "release-assets/skyport-darwin-amd64",
             "label": "SkyPort CLI macOS Intel"
           },
           {
-            "path": "release-assets/skyport-cli-darwin-arm64",
+            "path": "release-assets/skyport-darwin-arm64",
             "label": "SkyPort CLI macOS Apple Silicon"
           },
           {
-            "path": "release-assets/skyport-cli-windows-amd64.exe",
+            "path": "release-assets/skyport-windows-amd64.exe",
             "label": "SkyPort CLI Windows AMD64"
+          },
+          {
+            "path": "release-assets/skyport-server-linux-amd64",
+            "label": "SkyPort Server Linux AMD64"
+          },
+          {
+            "path": "release-assets/skyport-server-linux-arm64",
+            "label": "SkyPort Server Linux ARM64"
+          },
+          {
+            "path": "release-assets/skyport-server-darwin-amd64",
+            "label": "SkyPort Server macOS Intel"
+          },
+          {
+            "path": "release-assets/skyport-server-darwin-arm64",
+            "label": "SkyPort Server macOS Apple Silicon"
+          },
+          {
+            "path": "release-assets/skyport-server-windows-amd64.exe",
+            "label": "SkyPort Server Windows AMD64"
           }
         ]
       }
