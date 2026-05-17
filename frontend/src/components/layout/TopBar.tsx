@@ -167,7 +167,7 @@ export function TopBar({ className }: { className?: string }) {
                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notifications</h3>
                {hasUpdate && <span className="text-[10px] bg-red-500 text-white px-2 py-0.5 rounded-full font-bold shadow-sm shadow-red-500/20">1 New</span>}
             </div>
-            <div className="max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
+            <div className="max-h-87.5 overflow-y-auto scrollbar-thin scrollbar-thumb-muted-foreground/20 scrollbar-track-transparent">
               {hasUpdate ? (
                 <div 
                   className="p-4 flex gap-3 hover:bg-muted/50 cursor-pointer transition-colors group" 
