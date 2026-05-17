@@ -21,6 +21,12 @@ export type Deployment = {
   error?: string;
   port?: number;
   createdAt?: string;
+  // extended
+  logPath?: string;
+  containerID?: string;
+  ContainerID?: string;
+  commitSHA?: string;
+  branch?: string;
 };
 
 export type DockerContainer = {
@@ -192,6 +198,11 @@ const normalizeDeployment = (raw: any): Deployment => ({
   error: raw?.error ?? raw?.Error,
   port: raw?.port ?? raw?.Port ?? undefined,
   createdAt: raw?.createdAt ?? raw?.CreatedAt,
+  logPath: raw?.logPath ?? raw?.LogPath ?? raw?.log_path,
+  containerID: raw?.containerID ?? raw?.containerID ?? raw?.ContainerID ?? raw?.container_id,
+  ContainerID: raw?.ContainerID ?? raw?.containerID ?? raw?.container_id,
+  commitSHA: raw?.commitSHA ?? raw?.CommitSHA ?? raw?.commit_sha,
+  branch: raw?.branch ?? raw?.Branch,
 });
 
 export const platformApi = {
@@ -294,6 +305,18 @@ export const platformApi = {
 
   pm2Logs: async (name: string, lines = 200) =>
     (await http.get<{ name: string; lines: number; log: string }>(`/pm2/processes/${encodeURIComponent(name)}/logs`, { params: { lines } })).data,
+
+  // Fetch docker container logs by name or id
+  dockerLogs: async (nameOrID: string, lines = 200) =>
+    (
+      await http.get<{ name: string; lines: number; log: string }>(
+        `/docker/container/${encodeURIComponent(nameOrID)}/logs`,
+        { params: { lines } }
+      )
+    ).data,
+
+  // Get single deployment details
+  getDeployment: async (id: number) => normalizeDeployment((await http.get<any>(`/deployments/${id}`)).data),
 
   pm2Action: async (name: string, action: "start" | "stop" | "restart" | "delete") => {
     const enc = encodeURIComponent(name);

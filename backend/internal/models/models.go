@@ -8,8 +8,9 @@ package models
 import (
 	"time"
 
-	"gorm.io/gorm"
 	"skyport/internal/vps"
+
+	"gorm.io/gorm"
 )
 
 // All returns every model that should exist in SQLite. Order can matter for FKs later.
@@ -86,6 +87,19 @@ type Deployment struct {
 	Port      int    `gorm:"default:0"`
 	LogPath   string `gorm:"size:1024;not null"`
 	Error     string `gorm:"size:2048"`
+
+	// Extended fields for Docker rolling deployments
+	CommitSHA           string     `gorm:"size:128;index"`
+	Branch              string     `gorm:"size:128;index"`
+	ImageTag            string     `gorm:"size:256"`
+	ContainerID         string     `gorm:"size:128;index"`
+	PreviousContainerID string     `gorm:"size:128;index"`
+	HealthStatus        string     `gorm:"size:30;index"`
+	ExposedPort         int        `gorm:"default:0"`
+	PublicURL           string     `gorm:"size:1024"`
+	RollbackAvailable   bool       `gorm:"not null;default:false"`
+	StartedAt           *time.Time `gorm:"index"`
+	FinishedAt          *time.Time `gorm:"index"`
 }
 
 // Runtime stores runtime installation metadata.

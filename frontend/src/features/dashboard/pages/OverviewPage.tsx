@@ -67,6 +67,23 @@ export function OverviewPage() {
         right={<div className="text-xs text-muted-foreground">WS: {ws}</div>}
       />
 
+      {/* OpenGraph banner linking to docs */}
+      <div className="mb-4">
+        <a
+          href="https://docs.skyport.akashhalder.in/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block overflow-hidden"
+          title="Read the SkyPort docs"
+        >
+          <img
+            src="https://ik.imagekit.io/AkashPortfolioAssets/skyport_assets/skyport_docs_og.png?updatedAt=1779030971066"
+            alt="SkyPort documentation"
+            className="w-full rounded-lg shadow-sm hover:opacity-95 transition max-h-56 md:max-h-72 object-cover object-top"
+          />
+        </a>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-4">
           <CardHeader>
@@ -301,12 +318,20 @@ function MetricChart({
             <XAxis dataKey="t" hide />
             <YAxis domain={[0, 100]} hide />
             <Tooltip
-              contentStyle={{
-                background: "var(--card)",
-                border: "1px solid var(--border)",
-                color: "var(--foreground)",
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const raw = Number(payload[0].value ?? 0)
+                  return (
+                    <div className="rounded-lg border bg-background p-2 shadow-md">
+                      <p className="text-sm font-bold" style={{ color }}>
+                        {raw.toFixed(2)}%
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{payload[0].payload.t}</p>
+                    </div>
+                  )
+                }
+                return null
               }}
-              labelStyle={{ color: "var(--muted-foreground)" }}
             />
             <Area
               type="monotone"

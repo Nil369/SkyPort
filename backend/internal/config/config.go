@@ -45,6 +45,8 @@ type Config struct {
 	// EncryptionKey is used for AES-256 encryption of sensitive data (SSH keys, passwords).
 	// Must be 16, 24, or 32 bytes when base64 decoded.
 	EncryptionKey string
+	// GitHubWebhookSecret optionally validates incoming GitHub webhook signatures
+	GitHubWebhookSecret string
 }
 
 // Load reads .env when present (local dev), then environment variables.
@@ -68,26 +70,27 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Host:             getEnv("SKYPORT_HOST", "0.0.0.0"),
-		Port:             port,
-		PublicURL:        os.Getenv("SKYPORT_PUBLIC_URL"),
-		DBPath:           getEnv("SKYPORT_DB_PATH", "./data/skyport.db"),
-		WorkspaceRoot:    getEnv("SKYPORT_WORKSPACE_ROOT", "./workspace"),
-		Environment:      getEnv("SKYPORT_ENV", "production"),
-		LogLevel:         getEnv("SKYPORT_LOG_LEVEL", "info"),
-		ShutdownTimeout:  time.Duration(shutdownSec) * time.Second,
-		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production__super_secret_jwt."),
-		JWTExpires:       time.Duration(jwtExpiresSec) * time.Second,
-		AllowedOrigins:   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:8080")),
-		TrustedProxies:   splitCSV(getEnv("TRUSTED_PROXIES", "127.0.0.1,::1")),
-		EnableTerminal:   getBoolEnv("ENABLE_TERMINAL", true),
-		EnableMetrics:    getBoolEnv("ENABLE_METRICS", true),
-		EnableDocker:     getBoolEnv("ENABLE_DOCKER", true),
-		EnableFilesystem: getBoolEnv("ENABLE_FILESYSTEM", true),
-		EnableProjects:   getBoolEnv("ENABLE_PROJECTS", true),
-		MetricsDiskPath:  getEnv("SKYPORT_METRICS_DISK_PATH", ""),
-		OpenRegistration: getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
-		EncryptionKey:    getEnv("SKYPORT_ENCRYPTION_KEY", "uE8+7Fq3H+vW9O8X/pY5ZQ=="), // Default for dev, should be changed in prod
+		Host:                getEnv("SKYPORT_HOST", "0.0.0.0"),
+		Port:                port,
+		PublicURL:           os.Getenv("SKYPORT_PUBLIC_URL"),
+		DBPath:              getEnv("SKYPORT_DB_PATH", "./data/skyport.db"),
+		WorkspaceRoot:       getEnv("SKYPORT_WORKSPACE_ROOT", "./workspace"),
+		Environment:         getEnv("SKYPORT_ENV", "production"),
+		LogLevel:            getEnv("SKYPORT_LOG_LEVEL", "info"),
+		ShutdownTimeout:     time.Duration(shutdownSec) * time.Second,
+		JWTSecret:           getEnv("JWT_SECRET", "change-me-in-production__super_secret_jwt."),
+		JWTExpires:          time.Duration(jwtExpiresSec) * time.Second,
+		AllowedOrigins:      splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:8080")),
+		TrustedProxies:      splitCSV(getEnv("TRUSTED_PROXIES", "127.0.0.1,::1")),
+		EnableTerminal:      getBoolEnv("ENABLE_TERMINAL", true),
+		EnableMetrics:       getBoolEnv("ENABLE_METRICS", true),
+		EnableDocker:        getBoolEnv("ENABLE_DOCKER", true),
+		EnableFilesystem:    getBoolEnv("ENABLE_FILESYSTEM", true),
+		EnableProjects:      getBoolEnv("ENABLE_PROJECTS", true),
+		MetricsDiskPath:     getEnv("SKYPORT_METRICS_DISK_PATH", ""),
+		OpenRegistration:    getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
+		EncryptionKey:       getEnv("SKYPORT_ENCRYPTION_KEY", "uE8+7Fq3H+vW9O8X/pY5ZQ=="), // Default for dev, should be changed in prod
+		GitHubWebhookSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
 	}
 
 	if err := cfg.validate(); err != nil {
