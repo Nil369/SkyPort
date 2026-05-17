@@ -48,17 +48,22 @@ jobs:
         working-directory: backend
         run: make swag-init
 
-      - name: Resolve build version
+      - name: Resolve next release version
         id: build_version
         run: |
-          VERSION_TAG=$(git tag --list --sort=-version:refname | head -n 1)
+          NEXT_VERSION=$(npx semantic-release --dry-run --no-ci --debug 2>&1 | sed -n 's/.*The next release version is \(.*\)$/\1/p' | tail -n 1)
 
-          if [ -z "$VERSION_TAG" ]; then
-            VERSION_TAG="v0.0.0"
+          if [ -z "$NEXT_VERSION" ]; then
+            VERSION_TAG=$(git tag --list --sort=-version:refname | head -n 1)
+
+            if [ -z "$VERSION_TAG" ]; then
+              VERSION_TAG="v0.0.0"
+            fi
+
+            NEXT_VERSION=${VERSION_TAG#v}
           fi
 
-          VERSION_VALUE=${VERSION_TAG#v}
-          echo "version=$VERSION_VALUE" >> "$GITHUB_OUTPUT"
+          echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Cross-compile binaries
         working-directory: backend

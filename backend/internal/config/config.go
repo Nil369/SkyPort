@@ -78,7 +78,7 @@ func Load() (*Config, error) {
 		ShutdownTimeout:  time.Duration(shutdownSec) * time.Second,
 		JWTSecret:        getEnv("JWT_SECRET", "change-me-in-production__super_secret_jwt."),
 		JWTExpires:       time.Duration(jwtExpiresSec) * time.Second,
-		AllowedOrigins:   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")),
+		AllowedOrigins:   splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:8080")),
 		TrustedProxies:   splitCSV(getEnv("TRUSTED_PROXIES", "127.0.0.1,::1")),
 		EnableTerminal:   getBoolEnv("ENABLE_TERMINAL", true),
 		EnableMetrics:    getBoolEnv("ENABLE_METRICS", true),
