@@ -135,7 +135,7 @@ export function MetricsPage() {
               <p className="text-sm text-muted-foreground">{activeSubtitle}</p>
             </div>
 
-            <div className="relative mb-8 h-[350px] w-full bg-background/50">
+            <div className="relative mb-8 h-87.5 w-full bg-background/50">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={activeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
@@ -146,13 +146,14 @@ export function MetricsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-muted-foreground/30" vertical horizontal />
                   <XAxis dataKey="t" hide />
-                  <YAxis domain={[0, 100]} orientation="right" tick={{ fontSize: 10, fill: "currentColor" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                  <YAxis domain={[0, 100]} orientation="right" tick={{ fontSize: 10, fill: "currentColor" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${Number(v).toFixed(2)}%`} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
+                        const raw = Number(payload[0].value ?? 0)
                         return (
                           <div className="rounded-lg border bg-background p-2 shadow-md">
-                            <p className="text-sm font-bold" style={{ color: activeColor.stroke }}>{payload[0].value}%</p>
+                            <p className="text-sm font-bold" style={{ color: activeColor.stroke }}>{raw.toFixed(2)}%</p>
                             <p className="text-[10px] text-muted-foreground">{payload[0].payload.t}</p>
                           </div>
                         );
@@ -230,7 +231,7 @@ function MetricSidebarItem({
         active && "bg-muted hover:bg-muted"
       )}
     >
-      <div className={cn("mt-1 flex-shrink-0")} style={{ color: active ? color : undefined }}>{icon}</div>
+      <div className={cn("mt-1 shrink-0")} style={{ color: active ? color : undefined }}>{icon}</div>
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>

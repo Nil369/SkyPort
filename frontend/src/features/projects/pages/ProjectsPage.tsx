@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { platformApi } from "@/features/platform/api";
+import { Eye, EyeOff, Copy, X, Zap, Info } from 'lucide-react'
 import { parseEnvTextSimple } from "@/lib/envUtils";
 import { resolvedStartCommand, withNodeHintsIfApplicable } from "@/lib/runtimeHints";
 
@@ -30,6 +31,8 @@ export function ProjectsPage() {
   const [deployStartCmd, setDeployStartCmd] = React.useState("");
   const [deployWorkingDir, setDeployWorkingDir] = React.useState("");
   const [deployEnvText, setDeployEnvText] = React.useState("");
+  const [settingsProjectId, setSettingsProjectId] = React.useState<number | null>(null);
+  const [showWebhookSecret, setShowWebhookSecret] = React.useState(false);
   const autoFilledDeployProjectId = React.useRef<number | null>(null);
 
   const location = useLocation();
@@ -151,6 +154,13 @@ export function ProjectsPage() {
       toast.error(err?.response?.data?.error?.message ?? "Failed to deploy project");
     },
   });
+
+  const getServerBaseUrl = React.useCallback(() => {
+    // Get server domain/IP from backend API base URL instead of client origin
+    // This works for both localhost, domains, and IP addresses
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || window.location.origin
+    return apiBaseUrl
+  }, [])
 
   return (
     <PageShell>
@@ -355,6 +365,13 @@ export function ProjectsPage() {
                       >
                         Deploy
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSettingsProjectId(p.id)}
+                      >
+                        Settings
+                      </Button>
                       <Button variant="destructive" size="sm" onClick={() => deleteProject.mutate(p.id)}>
                         Delete
                       </Button>
@@ -388,6 +405,158 @@ export function ProjectsPage() {
           </div>
         ) : null}
       </Card>
+
+      {/* Settings Modal */}
+      {settingsProjectId ? (
+        <Card className="overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Rollout & Webhook Settings</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setSettingsProjectId(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Webhook Section */}
+            <div className="rounded-lg border border-border/70 p-4">
+              <h3 className="font-semibold mb-3">GitHub Webhook Setup</h3>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 block">
+                    Webhook URL (use for GitHub webhook setup)
+                  </Label>
+                  <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={`${getServerBaseUrl()}/api/v1/webhooks/github/${settingsProjectId}`}
+                        className="font-mono text-xs"
+                      />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title="Copy webhook URL"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${getServerBaseUrl()}/api/v1/webhooks/github/${settingsProjectId}`);
+                        toast.success("Webhook URL copied to clipboard");
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 flex items-start gap-2">
+                    <Info className="h-4 w-4 text-blue-600 mt-1" />
+                    <span>This URL uses your SkyPort server's domain/IP, not your browser's. GitHub will send push events here.</span>
+                  </p>
+                </div>
+                <div>
+                    <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1 flex items-center justify-between">
+                      <span>Webhook Secret</span>
+                      <button
+                        onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                        className="text-xs text-blue-500 hover:text-blue-600 font-normal flex items-center gap-2"
+                        title={showWebhookSecret ? 'Hide secret' : 'Show secret'}
+                      >
+                        {showWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        <span className="capitalize">{showWebhookSecret ? 'Hide' : 'Show'}</span>
+                      </button>
+                    </Label>
+                  <div className="relative">
+                    <Input
+                      readOnly
+                      type={showWebhookSecret ? "text" : "password"}
+                      value="GITHUB_WEBHOOK_SECRET_VALUE_HERE"
+                      className="font-mono text-xs pr-10"
+                    />
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText('GITHUB_WEBHOOK_SECRET_VALUE_HERE');
+                        toast.success('Secret copied to clipboard');
+                      }}
+                      className="absolute right-2 top-2 text-xs text-muted-foreground hover:text-foreground"
+                      title="Copy secret"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Set the same secret in:
+                  </p>
+                  <ol className="text-xs text-muted-foreground list-decimal pl-5 space-y-1 mt-1">
+                    <li>SkyPort environment: <code className="bg-muted px-1 rounded">GITHUB_WEBHOOK_SECRET=your_secret_here</code></li>
+                    <li>GitHub webhook: paste same value in "Secret" field</li>
+                  </ol>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs space-y-3">
+                <div className="font-semibold text-blue-900 dark:text-blue-100 flex items-center gap-2"><Zap className="h-4 w-4" /> How it works:</div>
+                <ul className="space-y-2 text-blue-800 dark:text-blue-200">
+                  <li><strong>1. GitHub Webhook:</strong> When you push code, GitHub sends a notification to SkyPort</li>
+                  <li><strong>2. SkyPort Receives:</strong> SkyPort's webhook endpoint verifies the secret and receives the push event</li>
+                  <li><strong>3. Auto-Deploy:</strong> SkyPort automatically triggers a new deployment of your project</li>
+                  <li><strong>4. Rolling Update:</strong> If using Docker strategy, new version deploys alongside old one (zero downtime)</li>
+                </ul>
+                <div className="border-t border-blue-200 dark:border-blue-800 pt-3 mt-3">
+                  <div className="font-semibold text-blue-900 dark:text-blue-100 mb-2">Setup steps:</div>
+                  <ol className="list-decimal pl-5 space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>Go to GitHub repo → Settings → Webhooks → Add webhook</li>
+                    <li>Paste the <strong>Webhook URL</strong> above in the Payload URL field</li>
+                    <li>Set Content type to <strong>application/json</strong></li>
+                    <li>Paste the <strong>Webhook Secret</strong> in GitHub's Secret field</li>
+                    <li>Choose event: select <strong>"Let me select individual events"</strong> → check <strong>Push</strong></li>
+                    <li>Check <strong>"Active"</strong></li>
+                    <li>Click <strong>"Add webhook"</strong></li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Rollout Section */}
+            <div className="rounded-lg border border-border/70 p-4">
+              <h3 className="font-semibold mb-3">Rolling Updates (Zero Downtime)</h3>
+              <div className="space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  Rolling updates allow you to deploy new versions without downtime. SkyPort gradually shifts traffic from old containers to new ones.
+                </p>
+                <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs">
+                  <div className="font-semibold text-green-900 dark:text-green-100 mb-2">✓ How it works:</div>
+                  <ol className="list-decimal pl-5 space-y-1 text-green-800 dark:text-green-200">
+                    <li>GitHub webhook triggers deployment (you push code)</li>
+                    <li>SkyPort pulls latest code and builds new Docker image</li>
+                    <li>New container starts running (old one still serving traffic)</li>
+                    <li>Health checks verify new container is working</li>
+                    <li>Traffic gradually shifts to new container</li>
+                    <li>Old container stops (zero downtime achieved!)</li>
+                  </ol>
+                </div>
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
+                  <strong>⚠️ Requirements:</strong>
+                </div>
+                <ul className="list-disc pl-5 text-muted-foreground space-y-1 text-sm">
+                  <li>✓ Deployment strategy: <strong>Docker</strong></li>
+                  <li>✓ Server RAM: <strong>≥2GB available</strong></li>
+                  <li>✓ GitHub webhook: <strong>configured above</strong></li>
+                  <li>✓ Project accessibility: <strong>publicly reachable or via VPN</strong></li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Public URL Section */}
+            <div className="rounded-lg border border-border/70 p-4">
+              <h3 className="font-semibold mb-3">Public URL</h3>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>To make your deployment publicly accessible:</p>
+                <ol className="list-decimal pl-5 space-y-1">
+                  <li>Use a domain via Domains section</li>
+                  <li>Or use ngrok for quick public access: <code className="bg-muted px-1 rounded text-xs">ngrok http 3000</code></li>
+                </ol>
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={() => setSettingsProjectId(null)}>
+              Close
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
     </PageShell>
   );
 }
