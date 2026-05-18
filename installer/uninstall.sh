@@ -11,7 +11,7 @@ set -Eeuo pipefail
 #   - launchd service (macOS)
 #
 # Usage:
-#   curl -fsSL https://skyport.akashhalder.in/uninstall.sh | sudo bash
+#   curl -fsSL https://skyport.akashhalder.in/uninstaller.sh | sudo bash
 #
 # Optional:
 #   SKYPORT_PURGE_DATA=1
@@ -80,15 +80,10 @@ detect_os() {
 # =========================================================
 
 remove_systemd_service() {
-
   if command -v systemctl >/dev/null 2>&1; then
-
     if systemctl list-unit-files | grep -q '^skyport\.service'; then
-
       log "Stopping systemd service..."
-
       systemctl disable --now skyport >/dev/null 2>&1 || true
-
       systemctl daemon-reload || true
     fi
   fi
@@ -101,13 +96,9 @@ remove_systemd_service() {
 # =========================================================
 
 remove_launchd_service() {
-
   if [ -f "${LAUNCHD_FILE}" ]; then
-
     log "Stopping launchd service..."
-
     launchctl unload "${LAUNCHD_FILE}" >/dev/null 2>&1 || true
-
     rm -f "${LAUNCHD_FILE}" || true
   fi
 
@@ -116,11 +107,32 @@ remove_launchd_service() {
 }
 
 # =========================================================
+# PROCESS CLEANUP
+# =========================================================
+
+stop_running_processes() {
+  local pids
+  pids="$(pgrep -f 'skyport-server' 2>/dev/null || true)"
+
+  if [ -z "${pids}" ]; then
+    return
+  fi
+
+  log "Stopping running SkyPort processes..."
+
+  kill -TERM ${pids} >/dev/null 2>&1 || true
+
+  pids="$(pgrep -f 'skyport-server' 2>/dev/null || true)"
+  if [ -n "${pids}" ]; then
+    kill -KILL ${pids} >/dev/null 2>&1 || true
+  fi
+}
+
+# =========================================================
 # REMOVE FILES
 # =========================================================
 
 remove_binaries() {
-
   log "Removing binaries..."
 
   rm -f "${SERVER_BIN}" || true
@@ -128,7 +140,6 @@ remove_binaries() {
 }
 
 remove_config() {
-
   log "Removing configuration..."
 
   rm -f "${ENV_FILE}" || true
@@ -137,15 +148,10 @@ remove_config() {
 }
 
 remove_data() {
-
   if [ "${SKYPORT_PURGE_DATA}" = "1" ]; then
-
     log "Purging data directory..."
-
     rm -rf "${INSTALL_DIR}" || true
-
   else
-
     log "Keeping data directory:"
     log "  ${INSTALL_DIR}"
     log ""
@@ -154,13 +160,9 @@ remove_data() {
 }
 
 remove_user() {
-
   if [ "$(detect_os)" = "linux" ]; then
-
     if id -u skyport >/dev/null 2>&1; then
-
       log "Removing skyport user..."
-
       userdel skyport >/dev/null 2>&1 || true
     fi
   fi
@@ -171,7 +173,6 @@ remove_user() {
 # =========================================================
 
 main() {
-
   require_root
 
   local os
@@ -186,6 +187,8 @@ main() {
   if [ "${os}" = "darwin" ]; then
     remove_launchd_service
   fi
+
+  stop_running_processes
 
   remove_binaries
 

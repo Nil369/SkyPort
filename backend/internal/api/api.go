@@ -19,10 +19,20 @@ func Mount(a *app.App) {
 	// Order: recovery outermost so panics from inner middleware are caught.
 	a.Fiber.Use(middleware.Recovery())
 	a.Fiber.Use(middleware.RequestID())
+
+	// Proxy awareness: handle X-Forwarded-* headers from reverse proxies (Caddy, Nginx, etc)
+	a.Fiber.Use(middleware.ProxyHeaders(a.Config.TrustedProxies))
+
 	a.Fiber.Use(middleware.RequestLogger())
 	a.Fiber.Use(middleware.SecurityHeaders())
+
+	// CORS with support for self-hosted environments
 	a.Fiber.Use(middleware.CORS(a.Config.AllowedOrigins))
+
 	a.Fiber.Use(middleware.RateLimitPlaceholder())
+
+	// WebSocket upgrade aware of proxies
+	a.Fiber.Use(middleware.WebSocketUpgradeAware())
 
 	a.Fiber.Get("/api", apiRootHandler())
 

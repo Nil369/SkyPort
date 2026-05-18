@@ -1,5 +1,5 @@
 APP          := skyport-server
-VERSION      ?= 0.0.4
+VERSION      ?= 0.5.0
 ifeq ($(OS),Windows_NT)
 # GNU Make on Windows often uses cmd.exe for $(shell); use cmd-friendly redirection.
 COMMIT       ?= $(shell git rev-parse --short HEAD 2>nul || echo dev)
