@@ -18,16 +18,18 @@ import (
 // Config holds all process-wide settings. Keep fields pointer-free where possible
 // so the App container can copy or pass by value safely for read-only handlers.
 type Config struct {
-	Host             string
-	Port             int
-	PublicURL        string // optional, for future webhooks / links
-	DBPath           string
-	WorkspaceRoot    string
-	Environment      string // development | production
-	LogLevel         string // debug | info | warn | error
-	ShutdownTimeout  time.Duration
-	JWTSecret        string
-	JWTExpires       time.Duration
+	Host            string
+	Port            int
+	PublicURL       string // optional, for future webhooks / links
+	DBPath          string
+	WorkspaceRoot   string
+	Environment     string // development | production
+	LogLevel        string // debug | info | warn | error
+	ShutdownTimeout time.Duration
+	JWTSecret       string
+	JWTExpires      time.Duration
+	// AllowedOrigins lists permitted CORS origins. Use "*" to allow all origins (use with caution!).
+	// Examples: "http://localhost:3000,https://example.com" or "*" for public APIs.
 	AllowedOrigins   []string
 	TrustedProxies   []string
 	EnableTerminal   bool
@@ -80,7 +82,7 @@ func Load() (*Config, error) {
 		ShutdownTimeout:     time.Duration(shutdownSec) * time.Second,
 		JWTSecret:           getEnv("JWT_SECRET", "change-me-in-production__super_secret_jwt."),
 		JWTExpires:          time.Duration(jwtExpiresSec) * time.Second,
-		AllowedOrigins:      splitCSV(getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://127.0.0.1:8080")),
+		AllowedOrigins:      splitCSV(getEnv("ALLOWED_ORIGINS", "*")), // Allow all domains (http and https) by default. Override with comma-separated list to restrict.
 		TrustedProxies:      splitCSV(getEnv("TRUSTED_PROXIES", "127.0.0.1,::1")),
 		EnableTerminal:      getBoolEnv("ENABLE_TERMINAL", true),
 		EnableMetrics:       getBoolEnv("ENABLE_METRICS", true),

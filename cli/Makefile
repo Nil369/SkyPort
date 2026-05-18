@@ -1,7 +1,7 @@
 APP          := skyport
 BIN_DIR      := $(abspath ../bin/cli)
 BIN_DIR_WIN  := $(subst /,\,$(BIN_DIR))
-VERSION      ?= 0.0.2
+VERSION      ?= 0.5.0
 ifeq ($(OS),Windows_NT)
 COMMIT       ?= $(shell git rev-parse --short HEAD 2>nul || echo dev)
 BUILD_TIME   ?= $(shell powershell -NoProfile -Command "[DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')")
