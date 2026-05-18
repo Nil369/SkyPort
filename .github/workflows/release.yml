@@ -13,30 +13,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # =========================================================
+      # CHECKOUT
+      # =========================================================
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # =========================================================
+      # NODE
+      # =========================================================
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
+      # =========================================================
+      # GO
+      # =========================================================
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
 
+      # =========================================================
+      # INSTALL ROOT DEPS
+      # =========================================================
+
       - name: Install root dependencies
         run: npm ci
+
+      # =========================================================
+      # INSTALL FRONTEND DEPS
+      # =========================================================
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
+      # =========================================================
+      # BUILD FRONTEND
+      # =========================================================
+
       - name: Build frontend
         run: make frontend-build FRONTEND_USE_CI=1
+
+      # =========================================================
+      # WINDOWS ICON
+      # =========================================================
 
       - name: Ensure branding icon (optional)
         run: |
@@ -44,34 +72,65 @@ jobs:
             echo "No assets/logo.ico — Windows builds will omit embedded icon."
           fi
 
+      # =========================================================
+      # SWAGGER
+      # =========================================================
+
       - name: Regenerate Swagger
         working-directory: backend
         run: make swag-init
 
+      # =========================================================
+      # RESOLVE VERSION
+      # =========================================================
+
       - name: Resolve next release version
         id: build_version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          NEXT_VERSION=$(npx semantic-release --dry-run --no-ci 2>&1 | sed -n 's/.*The next release version is \(.*\)$/\1/p' | tail -n 1)
+          OUTPUT=$(npx semantic-release --dry-run --no-ci || true)
+
+          echo "$OUTPUT"
+
+          NEXT_VERSION=$(echo "$OUTPUT" | sed -n 's/.*The next release version is \(.*\)$/\1/p' | tail -n 1)
 
           if [ -z "$NEXT_VERSION" ]; then
-            echo "semantic-release did not resolve a next version."
-            echo "This usually means there are no conventional commits on the release branch yet."
-            exit 1
+            echo "No new semantic version detected."
+
+            CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            NEXT_VERSION="${CURRENT_TAG#v}"
+
+            echo "Using fallback version: $NEXT_VERSION"
           fi
 
           echo "version=$NEXT_VERSION" >> "$GITHUB_OUTPUT"
+
+      # =========================================================
+      # BUILD SERVER BINARIES
+      # =========================================================
 
       - name: Cross-compile server binaries
         working-directory: backend
         env:
           VERSION: ${{ steps.build_version.outputs.version }}
+          CGO_ENABLED: 0
         run: make build-all
+
+      # =========================================================
+      # BUILD CLI BINARIES
+      # =========================================================
 
       - name: Cross-compile CLI binaries
         working-directory: cli
         env:
           VERSION: ${{ steps.build_version.outputs.version }}
+          CGO_ENABLED: 0
         run: make build-all
+
+      # =========================================================
+      # PREPARE RELEASE ASSETS
+      # =========================================================
 
       - name: Prepare release assets
         run: |
@@ -83,8 +142,10 @@ jobs:
 
           cp bin/server/linux-amd64/skyport-server release-assets/skyport-server-linux-amd64
           cp bin/server/linux-arm64/skyport-server release-assets/skyport-server-linux-arm64
+
           cp bin/server/darwin-amd64/skyport-server release-assets/skyport-server-darwin-amd64
           cp bin/server/darwin-arm64/skyport-server release-assets/skyport-server-darwin-arm64
+
           cp bin/server/windows-amd64/skyport-server.exe release-assets/skyport-server-windows-amd64.exe
 
           # =========================================
@@ -93,9 +154,17 @@ jobs:
 
           cp bin/cli/linux-amd64/skyport release-assets/skyport-linux-amd64
           cp bin/cli/linux-arm64/skyport release-assets/skyport-linux-arm64
+
           cp bin/cli/darwin-amd64/skyport release-assets/skyport-darwin-amd64
           cp bin/cli/darwin-arm64/skyport release-assets/skyport-darwin-arm64
+
           cp bin/cli/windows-amd64/skyport.exe release-assets/skyport-windows-amd64.exe
+
+          ls -lah release-assets
+
+      # =========================================================
+      # SEMANTIC RELEASE
+      # =========================================================
 
       - name: Semantic Release
         env:
