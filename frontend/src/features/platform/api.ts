@@ -117,6 +117,58 @@ export type RuntimeDetectionResult = {
   suggested_app_name?: string;
 };
 
+export type GitHubSetupInfo = {
+  app_name: string;
+  app_slug: string;
+  app_install_url: string;
+  api_base_url: string;
+  web_base_url: string;
+  has_app_config: boolean;
+  has_webhook_secret: boolean;
+  fallback_modes: string[];
+  recommended_mode: string;
+  installations: Array<{
+    id: number;
+    installation_id: number;
+    account_login: string;
+    account_type: string;
+    status: string;
+    last_synced_at?: string;
+  }>;
+};
+
+export type GitHubRepository = {
+  id: number;
+  repository_id: number;
+  installation_id: number;
+  full_name: string;
+  name: string;
+  owner: string;
+  owner_type?: string;
+  private: boolean;
+  fork: boolean;
+  default_branch: string;
+  selected_branch?: string;
+  clone_url?: string;
+  ssh_url?: string;
+  homepage_url?: string;
+  description?: string;
+  language?: string;
+  runtime?: string;
+  framework?: string;
+  deployment_mode?: string;
+  selected: boolean;
+  last_synced_at?: string;
+};
+
+export type GitHubImportPreview = {
+  project: { id: number; name: string; path: string };
+  repository: GitHubRepository;
+  runtime: Record<string, unknown>;
+  deployment_suggestion: Record<string, unknown>;
+  connection: Record<string, unknown>;
+};
+
 export type Pm2Process = {
   name: string;
   pm_id: number;
@@ -240,12 +292,24 @@ export const platformApi = {
   writeFile: async (path: string, content: string) => (await http.put("/files/write", { path, content })).data,
   createFile: async (path: string, filename: string) => (await http.post("/files/file", { path, filename, content: "" })).data,
   createFolder: async (path: string) => (await http.post("/files/folder", { path })).data,
-  uploadFile: async (path: string, file: File) => {
+  renameFile: async (old_path: string, new_path: string) => (await http.patch("/files/rename", { old_path, new_path })).data,
+  uploadFile: async (
+    path: string,
+    file: File,
+    opts?: { relativePath?: string; onUploadProgress?: (progress: { loaded: number; total?: number }) => void },
+  ) => {
     const form = new FormData();
     form.append("path", path);
     form.append("file", file);
-    return (await http.post("/files/upload", form, { headers: { "Content-Type": "multipart/form-data" } })).data;
+    if (opts?.relativePath) form.append("relative_path", opts.relativePath);
+    return (
+      await http.post("/files/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (event) => opts?.onUploadProgress?.({ loaded: event.loaded, total: event.total }),
+      })
+    ).data;
   },
+  deleteFile: async (path: string) => (await http.delete("/files", { params: { path } })).data,
   downloadFileBlob: async (path: string) =>
     (
       await http.get<Blob>("/files/download", {
@@ -339,4 +403,39 @@ export const platformApi = {
   caddyInstall: async (execute: boolean) => (await http.post("/proxy/caddy/install", { execute })).data,
 
   checkUpdates: async () => (await http.get<UpdateCheckResult>("/updates/check")).data,
+
+  githubInstall: async () => (await http.get<{ install: string; setup: GitHubSetupInfo }>("/github/install")).data,
+  githubSetup: async () => (await http.get<{ setup: GitHubSetupInfo; connections: unknown[]; recommendation: string }>("/github/setup")).data,
+  githubConnect: async (input: {
+    auth_type: "app" | "pat" | "ssh";
+    installation_id?: number;
+    account_login?: string;
+    account_type?: string;
+    pat?: string;
+    ssh_private_key?: string;
+  }) => (await http.post("/github/connect", input)).data,
+  githubRepositories: async (params?: { installation_id?: number; q?: string; selected?: boolean; refresh?: boolean }) =>
+    (await http.get<{ repositories: GitHubRepository[] }>("/github/repositories", { params })).data.repositories,
+  githubImport: async (input: {
+    connection_id?: number;
+    installation_id?: number;
+    repository_id?: number;
+    full_name: string;
+    name?: string;
+    owner?: string;
+    clone_url?: string;
+    ssh_url?: string;
+    branch?: string;
+    deployment_mode?: "docker" | "native" | "pm2";
+    project_name?: string;
+    auth_type?: "app" | "pat" | "ssh";
+    pat?: string;
+    ssh_private_key?: string;
+    environment?: Record<string, string>;
+    selected?: boolean;
+    refresh?: boolean;
+    import_as_project?: boolean;
+    working_directory?: string;
+  }) => (await http.post<GitHubImportPreview>("/github/import", input)).data,
+  githubDisconnect: async () => (await http.post("/github/disconnect", {})).data,
 };

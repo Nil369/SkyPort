@@ -163,7 +163,6 @@ func catalog() []apps.Manifest {
 
 		app("Docker Registry", "docker-registry", "DevOps", "Private image registry for your applications.", []string{"docker"}, []int{5000}, "go", "256Mi", "0.25", "HTTP GET /v2/", []string{"devops", "images"}, true, false),
 		app("Portainer Agent", "portainer-agent", "DevOps", "Remote Docker agent for Portainer-style management.", []string{"docker"}, []int{9001}, "go", "128Mi", "0.1", "TCP 9001", []string{"devops", "docker"}, false, false),
-		
 
 		app("RabbitMQ", "rabbitmq", "Messaging", "AMQP broker for queues and reliable messaging.", []string{"docker", "native"}, []int{5672, 15672}, "erlang", "512Mi", "0.5", "HTTP GET /api/health/checks/local-alarms", []string{"messaging", "queue"}, false, false),
 		app("NATS", "nats", "Messaging", "Simple, secure, and high-performance messaging.", []string{"docker", "native"}, []int{4222}, "go", "128Mi", "0.1", "HTTP GET /healthz", []string{"messaging", "pubsub"}, false, false),
@@ -172,6 +171,36 @@ func catalog() []apps.Manifest {
 
 		app("VS Code Server", "vscode-server", "Developer Tools", "Remote browser-based VS Code runtime.", []string{"docker", "native"}, []int{8080}, "node", "512Mi", "0.5", "HTTP GET /", []string{"devtools", "editor"}, true, true),
 		app("Code-Server", "code-server", "Developer Tools", "Self-hosted VS Code in the browser.", []string{"docker", "native"}, []int{8080}, "node", "512Mi", "0.5", "HTTP GET /healthz", []string{"devtools", "editor"}, false, false),
+
+		app("MinIO", "minio", "Storage", "S3-compatible object storage for local and edge workloads.", []string{"docker", "native"}, []int{9000, 9001}, "go", "512Mi", "0.5", "HTTP GET /minio/health/live", []string{"storage", "s3"}, true, true),
+		app("Directus", "directus", "CMS", "Headless CMS and admin app for SQL backends.", []string{"docker", "native"}, []int{8055}, "node", "768Mi", "0.75", "HTTP GET /server/health", []string{"cms", "api"}, true, true),
+		app("Strapi", "strapi", "CMS", "Open-source headless CMS for content APIs.", []string{"docker", "native"}, []int{1337}, "node", "1Gi", "1", "HTTP GET /_health", []string{"cms", "api"}, true, false),
+		app("PocketBase", "pocketbase", "Databases", "All-in-one backend with realtime APIs and auth.", []string{"docker", "native"}, []int{8090}, "go", "256Mi", "0.25", "HTTP GET /api/health", []string{"backend", "sqlite"}, true, true),
+		app("Supabase", "supabase", "Databases", "Open-source Postgres platform with auth, storage, and realtime.", []string{"docker"}, []int{5432, 8000, 3000}, "node", "2Gi", "1", "HTTP GET /health", []string{"backend", "platform"}, true, true),
+		app("Meilisearch", "meilisearch", "Search", "Fast search engine for product and app search.", []string{"docker", "native"}, []int{7700}, "rust", "512Mi", "0.5", "HTTP GET /health", []string{"search", "index"}, true, true),
+		app("Typesense", "typesense", "Search", "Typo-tolerant search engine for modern apps.", []string{"docker", "native"}, []int{8108}, "c++", "512Mi", "0.5", "HTTP GET /health", []string{"search", "index"}, false, false),
+		app("Plausible", "plausible", "Analytics", "Privacy-focused analytics stack.", []string{"docker"}, []int{8000}, "elixir", "1Gi", "1", "HTTP GET /api/health", []string{"analytics", "privacy"}, true, false),
+		app("Umami", "umami", "Analytics", "Self-hosted web analytics.", []string{"docker", "native"}, []int{3000}, "node", "512Mi", "0.5", "HTTP GET /api/heartbeat", []string{"analytics", "privacy"}, false, true),
+		app("Gitea", "gitea", "Developer Tools", "Lightweight self-hosted Git service.", []string{"docker", "native"}, []int{3000}, "go", "512Mi", "0.5", "HTTP GET /api/healthz", []string{"git", "devtools"}, true, true),
+		app("Forgejo", "forgejo", "Developer Tools", "Community-maintained fork of Gitea.", []string{"docker", "native"}, []int{3000}, "go", "512Mi", "0.5", "HTTP GET /api/healthz", []string{"git", "devtools"}, true, false),
+		app("Jenkins", "jenkins", "DevOps", "Automation server for CI/CD pipelines.", []string{"docker", "native"}, []int{8080}, "java", "1Gi", "1", "HTTP GET /login", []string{"ci", "build"}, true, true),
+		app("Temporal", "temporal", "DevOps", "Workflow orchestration platform for durable services.", []string{"docker"}, []int{7233, 8233}, "go", "1Gi", "1", "HTTP GET /health", []string{"workflow", "orchestration"}, false, false),
+		app("Apache Kafka", "kafka", "Messaging", "Distributed event streaming platform.", []string{"docker"}, []int{9092}, "java", "2Gi", "1", "TCP 9092", []string{"streaming", "events"}, true, true),
+		app("Elasticsearch", "elasticsearch", "Search", "Distributed search and analytics engine.", []string{"docker"}, []int{9200}, "java", "2Gi", "1", "HTTP GET /_cluster/health", []string{"search", "analytics"}, true, true),
+		app("OpenSearch", "opensearch", "Search", "Open-source search and analytics suite.", []string{"docker"}, []int{9200}, "java", "2Gi", "1", "HTTP GET /_cluster/health", []string{"search", "analytics"}, false, true),
+		app("Keycloak", "keycloak", "Identity", "Identity and access management server.", []string{"docker", "native"}, []int{8080}, "java", "1Gi", "1", "HTTP GET /health/ready", []string{"auth", "identity"}, true, true),
+		app("Authentik", "authentik", "Identity", "Modern identity provider and access gateway.", []string{"docker"}, []int{9000}, "python", "1Gi", "1", "HTTP GET /if/health/live/", []string{"auth", "identity"}, true, false),
+		app("Vaultwarden", "vaultwarden", "Security", "Bitwarden-compatible password manager server.", []string{"docker", "native"}, []int{80}, "rust", "256Mi", "0.25", "HTTP GET /alive", []string{"security", "passwords"}, true, true),
+		app("Uptime Kuma", "uptime-kuma", "Monitoring", "Monitoring and status pages for services.", []string{"docker", "native"}, []int{3001}, "node", "256Mi", "0.25", "HTTP GET /", []string{"monitoring", "status"}, true, true),
+		app("Ollama", "ollama", "AI", "Local model runner for LLM workloads.", []string{"docker", "native"}, []int{11434}, "go", "2Gi", "1", "HTTP GET /api/tags", []string{"ai", "models"}, true, true),
+		app("n8n", "n8n", "Automation", "Workflow automation for integrations and webhooks.", []string{"docker", "native"}, []int{5678}, "node", "768Mi", "0.75", "HTTP GET /healthz", []string{"automation", "workflow"}, true, true),
+		app("Ghost", "ghost", "CMS", "Modern publishing platform for blogs and memberships.", []string{"docker", "native"}, []int{2368}, "node", "512Mi", "0.5", "HTTP GET /ghost/api/admin/site/", []string{"cms", "blog"}, false, true),
+		app("Appsmith", "appsmith", "Internal Tools", "Low-code app builder for internal tools.", []string{"docker"}, []int{8080}, "java", "1Gi", "1", "HTTP GET /api/v1/health", []string{"lowcode", "internal-tools"}, true, false),
+		app("Budibase", "budibase", "Internal Tools", "Open-source internal app platform.", []string{"docker"}, []int{10000}, "node", "1Gi", "1", "HTTP GET /api/global/authtest", []string{"lowcode", "internal-tools"}, false, false),
+		app("Coolify Agent", "coolify-agent", "DevOps", "Agent for remote workload management.", []string{"docker"}, []int{8000}, "go", "128Mi", "0.1", "TCP 8000", []string{"agent", "devops"}, true, false),
+		app("Redis Stack", "redis-stack", "Databases", "Redis plus search, JSON, and time-series modules.", []string{"docker", "native"}, []int{6379, 8001}, "database", "512Mi", "0.5", "TCP 6379", []string{"cache", "search"}, true, true),
+		app("InfluxDB", "influxdb", "Databases", "Time-series database for metrics and IoT data.", []string{"docker", "native"}, []int{8086}, "go", "512Mi", "0.5", "HTTP GET /health", []string{"metrics", "timeseries"}, false, true),
+		app("VictoriaMetrics", "victoriametrics", "Monitoring", "Fast metrics backend for Prometheus-compatible data.", []string{"docker", "native"}, []int{8428}, "go", "512Mi", "0.5", "HTTP GET /health", []string{"metrics", "timeseries"}, false, true),
 	}
 }
 

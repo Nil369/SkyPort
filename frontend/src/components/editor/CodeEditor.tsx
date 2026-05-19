@@ -42,7 +42,8 @@ export function CodeEditor({
     if (["yml", "yaml"].includes(lang)) return [yaml()];
     if (["sql"].includes(lang)) return [sql()];
     if (["xml", "svg"].includes(lang)) return [xml()];
-    return [javascript({ jsx: true, typescript: true })];
+    if (["shell", "sh", "bash", "zsh", "fish", "powershell", "ps1", "gitignore", "ignore", "text", "plaintext", "plain"].includes(lang)) return [];
+    return [];
   }, [language]);
 
   return (

@@ -47,6 +47,7 @@ export function MarketplacePage() {
   const [recent, setRecent] = React.useState<string[]>(() => safeReadRecent());
 
   const hostOs = React.useMemo(() => detectHostOs(systemQuery.data), [systemQuery.data]);
+  const totalRamBytes = React.useMemo(() => Number((systemQuery.data as any)?.memory?.total_bytes ?? 0), [systemQuery.data]);
 
   React.useEffect(() => {
     const q = new URLSearchParams(location.search).get("q") ?? "";
@@ -250,6 +251,11 @@ export function MarketplacePage() {
         <Badge variant="default" className="font-mono uppercase">
           OS-aware install flow
         </Badge>
+        {totalRamBytes > 0 && totalRamBytes < 2 * 1024 * 1024 * 1024 ? (
+          <Badge variant="warning" className="font-mono uppercase">
+            Low RAM host: Docker-heavy apps may be slow
+          </Badge>
+        ) : null}
         <span className="text-muted-foreground">
           Native installs are only offered when the selected app supports this host; Docker remains the fallback for cross-platform apps.
         </span>
@@ -307,6 +313,7 @@ export function MarketplacePage() {
                 title="Featured apps"
                 icon={<Sparkles className="size-4" />}
                 apps={featured}
+                totalRamBytes={totalRamBytes}
                 canInstall={hasInstallAccess}
                 onDetails={(app) => {
                   setSelected(app);
@@ -318,6 +325,7 @@ export function MarketplacePage() {
                 title="Trending"
                 icon={<Flame className="size-4" />}
                 apps={trending}
+                totalRamBytes={totalRamBytes}
                 canInstall={hasInstallAccess}
                 onDetails={(app) => {
                   setSelected(app);
@@ -329,6 +337,7 @@ export function MarketplacePage() {
                 title="Recently installed"
                 icon={<Clock3 className="size-4" />}
                 apps={recentApps}
+                totalRamBytes={totalRamBytes}
                 canInstall={hasInstallAccess}
                 emptyLabel="Open an install to seed this list."
                 onDetails={(app) => {
@@ -346,11 +355,12 @@ export function MarketplacePage() {
                 key={app.slug}
                 app={app}
                 canInstall={hasInstallAccess}
-                  onTagSearch={(value) => {
-                    setQuery(value);
-                    setSelected(null);
-                    setWizardOpen(false);
-                  }}
+                totalRamBytes={totalRamBytes}
+                onTagSearch={(value) => {
+                  setQuery(value);
+                  setSelected(null);
+                  setWizardOpen(false);
+                }}
                 onDetails={() => {
                   setSelected(app);
                   setWizardOpen(false);
@@ -558,7 +568,7 @@ export function MarketplacePage() {
                         <Button size="sm" variant="outline" disabled={validateMutation.isPending} onClick={() => validateMutation.mutate()}>
                           {validateMutation.isPending ? "Validating…" : "Run validation"}
                         </Button>
-                        <div className="min-h-[4rem] whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground">
+                        <div className="min-h-16 whitespace-pre-wrap rounded-md border border-border/60 bg-muted/30 p-2 font-mono text-[11px] text-muted-foreground">
                           {validationSummary ?? "Run validation to check Docker or preview native installers."}
                         </div>
                       </div>
@@ -648,12 +658,14 @@ export function MarketplacePage() {
 
 function MarketplaceCard({
   app,
+  totalRamBytes,
   onDetails,
   onInstall,
   canInstall,
   onTagSearch,
 }: {
   app: MarketplaceApp;
+  totalRamBytes: number;
   onDetails: () => void;
   onInstall: (method: "docker" | "native") => void;
   canInstall: boolean;
@@ -719,6 +731,11 @@ function MarketplaceCard({
           <span className="flex items-center gap-1">
             <Box className="size-3.5" /> {app.runtime}
           </span>
+          {totalRamBytes > 0 && parseMemoryToBytes(app.memory_requirements) > totalRamBytes ? (
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-500">
+              Higher than host RAM
+            </span>
+          ) : null}
         </div>
         <div className="rounded-lg border border-border/60 bg-muted/20 px-2 py-1 text-xs text-muted-foreground">
           <span className="font-semibold text-foreground">Ports:</span> {app.ports.join(", ") || "-"}
@@ -734,6 +751,16 @@ function MarketplaceCard({
       </CardContent>
     </Card>
   );
+}
+
+function parseMemoryToBytes(value: string) {
+  const input = value.trim().toLowerCase();
+  const numeric = Number.parseFloat(input);
+  if (!Number.isFinite(numeric)) return 0;
+  if (input.endsWith("gib") || input.endsWith("gb")) return numeric * 1024 * 1024 * 1024;
+  if (input.endsWith("mib") || input.endsWith("mb")) return numeric * 1024 * 1024;
+  if (input.endsWith("kib") || input.endsWith("kb")) return numeric * 1024;
+  return numeric;
 }
 
 // Mapping of app slugs to tech-stack-icons names
@@ -867,6 +894,7 @@ function MarketplaceShelf({
   title,
   icon,
   apps,
+  totalRamBytes,
   onInstall,
   onDetails,
   canInstall,
@@ -875,6 +903,7 @@ function MarketplaceShelf({
   title: string;
   icon: React.ReactNode;
   apps: MarketplaceApp[];
+  totalRamBytes: number;
   onInstall: (app: MarketplaceApp, method: "docker" | "native") => void;
   onDetails: (app: MarketplaceApp) => void;
   canInstall: boolean;
@@ -892,6 +921,7 @@ function MarketplaceShelf({
             <MarketplaceCard
               key={app.slug}
               app={app}
+              totalRamBytes={totalRamBytes}
               canInstall={canInstall}
               onTagSearch={() => undefined}
               onDetails={() => onDetails(app)}

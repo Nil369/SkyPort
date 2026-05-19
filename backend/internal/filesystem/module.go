@@ -217,10 +217,20 @@ func uploadHandler() fiber.Handler {
 			return response.BadRequest(c, err.Error())
 		}
 
+		relativePath := strings.TrimSpace(c.FormValue("relative_path"))
+		if relativePath == "" {
+			relativePath = strings.TrimSpace(c.FormValue("relativePath"))
+		}
+
 		// Get the uploaded file
 		file, err := c.FormFile("file")
 		if err != nil {
 			return response.BadRequest(c, "file form field is required or invalid: "+err.Error())
+		}
+		if relativePath != "" {
+			relativePath = strings.ReplaceAll(relativePath, "\\", "/")
+			relativePath = strings.TrimPrefix(relativePath, "/")
+			targetPath = filepath.Join(targetPath, filepath.FromSlash(relativePath))
 		}
 
 		// If path is a folder, save using uploaded filename.

@@ -36,6 +36,7 @@ func BuildTestApp(t *testing.T) *app.App {
 		EnableFilesystem: true,
 		EnableProjects:   true,
 		OpenRegistration: true,
+		EncryptionKey:    "uE8+7Fq3H+vW9O8X/pY5ZQ==",
 	}
 	app, err := bootstrap.Build(cfg)
 	if err != nil {

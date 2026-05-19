@@ -16,6 +16,7 @@ type Props = {
   selectedPath?: string;
   onOpenDirectory: (path: string) => void;
   onOpenFile: (item: FsItem) => void;
+  onContextMenu?: (item: FsItem, x: number, y: number) => void;
 };
 
 export function CodeExplorerTree({
@@ -25,6 +26,7 @@ export function CodeExplorerTree({
   selectedPath,
   onOpenDirectory,
   onOpenFile,
+  onContextMenu,
 }: Props) {
   const q = useQuery({
     queryKey: ["code-editor-files", rootPath],
@@ -60,7 +62,7 @@ export function CodeExplorerTree({
       {/* Indentation guide line */}
       {depth > 0 && (
         <div
-          className="absolute left-[7px] top-0 bottom-0 w-[1px] bg-border/20 group-hover/tree:bg-border/40 transition-colors"
+          className="absolute left-1.75 top-0 bottom-0 w-px bg-border/20 group-hover/tree:bg-border/40 transition-colors"
           style={{ left: (depth - 1) * 14 + 11 }}
         />
       )}
@@ -74,7 +76,7 @@ export function CodeExplorerTree({
             <div key={item.path} className="group/dir">
               <div
                 className={cn(
-                  "relative flex w-full items-center gap-0.5 rounded-sm py-[2px] pr-1 transition-colors cursor-pointer",
+                  "relative flex w-full items-center gap-0.5 rounded-sm py-0.5 pr-1 transition-colors cursor-pointer",
                   isSelected ? "bg-primary/15 text-primary" : "hover:bg-muted/60"
                 )}
                 style={{ paddingLeft: pad }}
@@ -82,10 +84,14 @@ export function CodeExplorerTree({
                   setExpanded((prev) => ({ ...prev, [item.path]: !isOpen }));
                   onOpenDirectory(item.path);
                 }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onContextMenu?.(item, e.clientX, e.clientY);
+                }}
               >
                 {/* Active indicator */}
                 {isSelected && (
-                  <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                  <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
                 )}
                 <button
                   type="button"
@@ -118,6 +124,7 @@ export function CodeExplorerTree({
                   selectedPath={selectedPath}
                   onOpenDirectory={onOpenDirectory}
                   onOpenFile={onOpenFile}
+                  onContextMenu={onContextMenu}
                 />
               ) : null}
             </div>
@@ -134,9 +141,13 @@ export function CodeExplorerTree({
               )}
               style={{ paddingLeft: pad + 20 }}
               onClick={() => onOpenFile(item)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onContextMenu?.(item, e.clientX, e.clientY);
+              }}
             >
               {isSelected && (
-                <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
+                <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)]" />
               )}
               <span className="shrink-0 transition-transform group-hover/file:scale-110" style={{ color: isSelected ? undefined : iconCfg.color }}>
                 {iconCfg.icon}

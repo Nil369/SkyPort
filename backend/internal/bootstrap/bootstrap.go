@@ -40,6 +40,7 @@ import (
 	"skyport/internal/docker"
 	"skyport/internal/filesystem"
 	"skyport/internal/frontend"
+	ghub "skyport/internal/github"
 	"skyport/internal/httperrors"
 	"skyport/internal/marketplace"
 	"skyport/internal/metrics"
@@ -161,6 +162,7 @@ func Build(cfg *config.Config) (*app.App, error) {
 	container.RegisterModule(&orchestrator.Module{})
 	container.RegisterModule(&users.Module{})
 	container.RegisterModule(&audit.Module{})
+	container.RegisterModule(ghub.NewModule(container))
 	container.RegisterModule(&marketplace.Module{})
 	container.RegisterModule(&cluster.Module{})
 	container.RegisterModule(&vps.Module{})

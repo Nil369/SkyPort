@@ -25,6 +25,7 @@ import { UsersPage } from "@/features/users/pages/UsersPage";
 import { AdminPage } from "@/features/admin/pages/AdminPage";
 import { ProfilePage } from "@/features/users/pages/ProfilePage";
 import { MarketplacePage } from "@/features/marketplace/pages/MarketplacePage";
+import { GitHubPage } from "@/features/github/pages/GitHubPage";
 import { ServersPage } from "@/features/cluster/pages/ServersPage";
 import { PERMS } from "@/lib/permissions";
 
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
       { path: "/settings", element: <SettingsPage /> },
       { path: "/profile", element: <ProfilePage /> },
       { path: "/marketplace", element: <MarketplacePage /> },
+      { path: "/github", element: <GitHubPage /> },
       {
         path: "/team",
         element: (
