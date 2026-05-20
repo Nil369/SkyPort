@@ -52,9 +52,11 @@ type Config struct {
 	GitHubAppID         string
 	GitHubAppName       string
 	GitHubAppSlug       string
+	GitHubPrivateKey    string
 	GitHubAppPrivateKey string
 	GitHubAPIBaseURL    string
 	GitHubWebBaseURL    string
+	GitHubBridgeURL     string
 	FrontendURL         string
 }
 
@@ -100,12 +102,14 @@ func Load() (*Config, error) {
 		OpenRegistration:    getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
 		EncryptionKey:       getEnv("SKYPORT_ENCRYPTION_KEY", "uE8+7Fq3H+vW9O8X/pY5ZQ=="), // Default for dev, should be changed in prod
 		GitHubWebhookSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
-		GitHubAppID:         getEnv("GITHUB_APP_ID", ""),
+		GitHubAppID:         getEnv("APP_ID", "3771772"),
 		GitHubAppName:       getEnv("GITHUB_APP_NAME", "SkyPort"),
 		GitHubAppSlug:       getEnv("GITHUB_APP_SLUG", "skyportdeploy"),
-		GitHubAppPrivateKey: getEnv("GITHUB_APP_PRIVATE_KEY", ""),
+		GitHubPrivateKey:    getEnv("APP_PRIVATE_KEY", ""),
+		GitHubAppPrivateKey: getEnv("APP_PRIVATE_KEY", ""),
 		GitHubAPIBaseURL:    getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
 		GitHubWebBaseURL:    getEnv("GITHUB_WEB_BASE_URL", "https://github.com"),
+		GitHubBridgeURL:     getEnv("GITHUB_BRIDGE_URL", "https://skyport.akashhalder.in"),
 		FrontendURL:         getEnv("SKYPORT_FRONTEND_URL", "*"),
 	}
 

@@ -26,6 +26,9 @@ import { AdminPage } from "@/features/admin/pages/AdminPage";
 import { ProfilePage } from "@/features/users/pages/ProfilePage";
 import { MarketplacePage } from "@/features/marketplace/pages/MarketplacePage";
 import { GitHubPage } from "@/features/github/pages/GitHubPage";
+import { GitHubCompletePage } from "@/features/github/pages/GitHubCompletePage";
+import { GitHubRepositoriesPage } from "@/features/github/pages/GitHubRepositoriesPage";
+import { GitHubSettingsPage } from "@/features/github/pages/GitHubSettingsPage";
 import { ServersPage } from "@/features/cluster/pages/ServersPage";
 import { PERMS } from "@/lib/permissions";
 
@@ -65,9 +68,12 @@ export const router = createBrowserRouter([
       { path: "/metrics", element: <MetricsPage /> },
       { path: "/domains", element: <DomainsPage /> },
       { path: "/settings", element: <SettingsPage /> },
+      { path: "/settings/github", element: <GitHubSettingsPage /> },
       { path: "/profile", element: <ProfilePage /> },
       { path: "/marketplace", element: <MarketplacePage /> },
       { path: "/github", element: <GitHubPage /> },
+      { path: "/github/complete", element: <GitHubCompletePage /> },
+      { path: "/github/repositories", element: <GitHubRepositoriesPage /> },
       {
         path: "/team",
         element: (
