@@ -7,7 +7,7 @@ import tailwindcss from "@tailwindcss/vite"
 export default defineConfig({
   // This UI is embedded and served by the Go backend. Using a relative base
   // keeps asset URLs portable when served from a subpath or embedded FS.
-  base: './',
+  base: '/',
   plugins: [
     react(), 
     tailwindcss()

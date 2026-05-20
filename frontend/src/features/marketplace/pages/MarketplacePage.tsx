@@ -470,7 +470,7 @@ export function MarketplacePage() {
         >
           <Card className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
             {resolveMarketplaceIcon(selected) ? (
-              <div className="h-48 w-full flex items-center justify-center bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-600 dark:to-slate-800">
+              <div className="h-48 w-full flex items-center justify-center bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-800 dark:to-slate-950">
                 <MarketplaceAppIcon app={selected} variant="hero" />
               </div>
             ) : null}
@@ -700,7 +700,7 @@ function MarketplaceCard({
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       {resolveMarketplaceIcon(app) ? (
-        <div className="relative flex h-44 items-center justify-center overflow-hidden bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-600 dark:to-slate-800">
+        <div className="relative flex h-44 items-center justify-center overflow-hidden bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-800 dark:to-slate-950">
           <div className="transition-transform duration-300 hover:scale-110">
             <MarketplaceAppIcon app={app} variant="card" />
           </div>

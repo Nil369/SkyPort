@@ -137,6 +137,66 @@ export type GitHubSetupInfo = {
   }>;
 };
 
+export type GitHubBridgeInfo = {
+  bridge_url: string;
+  connect_url: string;
+  has_app_config: boolean;
+  has_private_key: boolean;
+  app_id?: string;
+  github_base_url?: string;
+};
+
+export type GitHubSetupConnection = {
+  installation_id: number;
+  connected: boolean;
+};
+
+export type GitHubSetupResponse = {
+  setup: {
+    bridge_url: string;
+    has_app_config: boolean;
+  };
+  connections: GitHubSetupConnection[];
+  recommendation: string;
+};
+
+export type GitHubInstallationRecord = {
+  id: number;
+  installation_id: number;
+  created_at: string;
+};
+
+export type GitHubRepositorySummary = {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  fork?: boolean;
+  archived?: boolean;
+  disabled?: boolean;
+  default_branch: string;
+  updated_at?: string;
+  owner?: string;
+  clone_url?: string;
+  ssh_url?: string;
+  homepage_url?: string;
+  description?: string;
+  language?: string;
+  license?: string;
+  stargazers_count?: number;
+  forks_count?: number;
+  open_issues_count?: number;
+  owner_avatar_url?: string;
+  topics?: string[];
+};
+
+export type GitHubImportResponse = {
+  project: { id: number; name: string; path: string };
+  repository: GitHubRepositorySummary;
+  framework: { framework: string; files: string[] };
+  installation: GitHubInstallationRecord;
+};
+
 export type GitHubRepository = {
   id: number;
   repository_id: number;
@@ -404,8 +464,15 @@ export const platformApi = {
 
   checkUpdates: async () => (await http.get<UpdateCheckResult>("/updates/check")).data,
 
+  githubBridgeInfo: async () => (await http.get<GitHubBridgeInfo>("/github/bridge")).data,
+  githubSaveInstallation: async (installationId: number) =>
+    (await http.post<GitHubInstallationRecord>("/github/installations", { installationId })).data,
+  githubListRepositories: async () => (await http.get<{ repositories: GitHubRepositorySummary[] }>("/github/repositories")).data.repositories,
+  githubImportProject: async (input: { repository: string; branch?: string }) =>
+    (await http.post<GitHubImportResponse>("/projects/import/github", input)).data,
+
   githubInstall: async () => (await http.get<{ install: string; setup: GitHubSetupInfo }>("/github/install")).data,
-  githubSetup: async () => (await http.get<{ setup: GitHubSetupInfo; connections: unknown[]; recommendation: string }>("/github/setup")).data,
+  githubSetup: async () => (await http.get<GitHubSetupResponse>("/github/setup")).data,
   githubConnect: async (input: {
     auth_type: "app" | "pat" | "ssh";
     installation_id?: number;

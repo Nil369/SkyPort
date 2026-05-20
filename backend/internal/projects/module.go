@@ -13,6 +13,7 @@ import (
 
 	"skyport/internal/app"
 	"skyport/internal/auth"
+	gh "skyport/internal/github"
 	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/validator"
@@ -33,6 +34,7 @@ func (m *Module) Register(a *app.App) error {
 	r.Use(auth.RequireJWT(a.Config.JWTSecret))
 	r.Get("/", listProjects(a))
 	r.Post("/", createProject(a, base))
+	r.Post("/import/github", importGitHubProject(a, base))
 	r.Delete("/:id", deleteProject(a))
 	return nil
 }
@@ -45,6 +47,11 @@ type createProjectRequest struct {
 	GitSSHKey string `json:"git_ssh_key" validate:"omitempty"`
 	GitPAT    string `json:"git_pat" validate:"omitempty"`
 	GitBranch string `json:"git_branch" validate:"omitempty,max=255"`
+}
+
+type importGitHubProjectRequest struct {
+	Repository string `json:"repository" validate:"required,max=255"`
+	Branch     string `json:"branch" validate:"omitempty,max=255"`
 }
 
 var slugRx = regexp.MustCompile(`[^a-zA-Z0-9-_]+`)
@@ -108,6 +115,87 @@ func createProject(a *app.App, base string) fiber.Handler {
 		}
 		return response.JSON(c, fiber.StatusCreated, project)
 	}
+}
+
+func importGitHubProject(a *app.App, base string) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req importGitHubProjectRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+
+		repository := strings.TrimSpace(req.Repository)
+		if repository == "" {
+			return response.BadRequest(c, "repository is required")
+		}
+
+		installation, err := latestGitHubInstallation(a)
+		if err != nil {
+			return response.Error(c, fiber.StatusNotFound, "github_installation_missing", "no GitHub installation has been saved yet")
+		}
+
+		svc := gh.NewService(a.Config)
+		token, _, err := svc.InstallationAccessToken(c.UserContext(), installation.InstallationID)
+		if err != nil {
+			return response.Error(c, fiber.StatusBadGateway, "github_installation_token_failed", err.Error())
+		}
+
+		name := filepath.Base(repository)
+		slug := strings.ToLower(strings.Trim(slugRx.ReplaceAllString(name, "-"), "-"))
+		if slug == "" {
+			slug = "github-project"
+		}
+		path := filepath.Join(base, slug)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			return err
+		}
+
+		cloneURL := "https://github.com/" + repository + ".git"
+		if err := gitCloneRepoWithAuth(cloneURL, path, "pat", "", token, req.Branch); err != nil {
+			_ = os.RemoveAll(path)
+			return response.Error(c, fiber.StatusBadRequest, "github_import_failed", err.Error())
+		}
+
+		framework, err := gh.DetectFramework(path)
+		if err != nil {
+			framework = gh.FrameworkDetection{Framework: "unknown"}
+		}
+
+		project := &models.Project{Name: name, Path: path, GitURL: cloneURL, Private: true}
+		if err := a.DB.Create(project).Error; err != nil {
+			_ = os.RemoveAll(path)
+			return err
+		}
+
+		return response.OK(c, fiber.Map{
+			"project": fiber.Map{
+				"id":   project.ID,
+				"name": project.Name,
+				"path": project.Path,
+			},
+			"repository": fiber.Map{
+				"full_name":      repository,
+				"name":           name,
+				"private":        true,
+				"default_branch": strings.TrimSpace(req.Branch),
+				"clone_url":      cloneURL,
+			},
+			"framework": framework,
+			"installation": fiber.Map{
+				"id":              installation.ID,
+				"installation_id": installation.InstallationID,
+				"created_at":      installation.CreatedAt,
+			},
+		})
+	}
+}
+
+func latestGitHubInstallation(a *app.App) (models.GitHubInstallation, error) {
+	var installation models.GitHubInstallation
+	if err := a.DB.Order("created_at desc").First(&installation).Error; err != nil {
+		return models.GitHubInstallation{}, err
+	}
+	return installation, nil
 }
 
 // gitCloneRepo clones a public git repository to the specified path.

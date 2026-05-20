@@ -179,22 +179,14 @@ type GitHubConnection struct {
 	Connected       bool   `gorm:"not null;default:false;index" json:"connected"`
 }
 
-// GitHubInstallation caches installation metadata so the repo list can be refreshed cheaply.
+// GitHubInstallation stores the active GitHub App installation ID for the instance.
 type GitHubInstallation struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-
-	UserID         uint       `gorm:"index;not null" json:"user_id"`
-	InstallationID int64      `gorm:"uniqueIndex;not null" json:"installation_id"`
-	AccountLogin   string     `gorm:"size:255;index" json:"account_login,omitempty"`
-	AccountType    string     `gorm:"size:32" json:"account_type,omitempty"`
-	AccessToken    string     `gorm:"size:4096" json:"access_token,omitempty"`
-	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
-	LastSyncedAt   *time.Time `json:"last_synced_at,omitempty"`
-	Status         string     `gorm:"size:32;index;not null;default:inactive" json:"status"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	InstallationID int64     `gorm:"uniqueIndex;not null" json:"installation_id"`
+	CreatedAt      time.Time `json:"created_at"`
 }
+
+func (GitHubInstallation) TableName() string { return "github_installations" }
 
 // GitHubRepository caches repository metadata and the branch selected for import.
 type GitHubRepository struct {
