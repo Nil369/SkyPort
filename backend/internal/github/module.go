@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 	"skyport/internal/app"
 	"skyport/internal/auth"
 	"skyport/internal/capabilities"
+	"skyport/internal/config"
 	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/runtime"
@@ -37,38 +40,41 @@ func NewModule(cfg *app.App) *Module {
 func (m *Module) Name() string { return "github" }
 
 func (m *Module) Register(a *app.App) error {
-	r := a.Fiber.Group("/api/v1/github", auth.RequireJWT(a.Config.JWTSecret))
-	r.Get("/install", githubInstallHandler(a, m.service))
-	r.Get("/setup", githubSetupHandler(a, m.service))
-	r.Post("/connect", githubConnectHandler(a))
-	r.Get("/repositories", githubRepositoriesHandler(a, m.service))
-	r.Post("/import", githubImportHandler(a, m.service))
-	r.Post("/disconnect", githubDisconnectHandler(a))
-	r.Post("/webhook", githubWebhookPlaceholder())
+	public := a.Fiber.Group("/api/v1/github")
+	public.Get("/install", githubInstallHandler(a, m.service))
+	public.Get("/setup", githubSetupHandler(a, m.service))
+	public.Post("/webhook", githubWebhookPlaceholder())
+
+	a.Fiber.Get("/github", githubLandingHandler(a))
+
+	protected := a.Fiber.Group("/api/v1/github", auth.RequireJWT(a.Config.JWTSecret))
+	protected.Post("/connect", githubConnectHandler(a))
+	protected.Get("/repositories", githubRepositoriesHandler(a, m.service))
+	protected.Post("/import", githubImportHandler(a, m.service))
+	protected.Post("/disconnect", githubDisconnectHandler(a))
 	return nil
 }
 
 func githubInstallHandler(a *app.App, svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		userID, err := auth.UserIDFromCtx(c)
-		if err != nil {
-			return response.Unauthorized(c, "authentication required")
-		}
+		userID, _ := optionalUserIDFromCtx(c)
 		installations := make([]Installation, 0, 4)
-		_ = a.DB.Model(&models.GitHubInstallation{}).
-			Where("user_id = ?", userID).
-			Order("updated_at desc").
-			Limit(8).
-			Find(&installations).Error
+		if userID > 0 {
+			_ = a.DB.Model(&models.GitHubInstallation{}).
+				Where("user_id = ?", userID).
+				Order("updated_at desc").
+				Limit(8).
+				Find(&installations).Error
+		}
 		return response.OK(c, fiber.Map{"install": svc.installURL(a.Config), "setup": svc.setupInfo(a.Config, installations)})
 	}
 }
 
 func githubSetupHandler(a *app.App, svc *Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		userID, err := auth.UserIDFromCtx(c)
-		if err != nil {
-			return response.Unauthorized(c, "authentication required")
+		userID, authed := optionalUserIDFromCtx(c)
+		if !authed {
+			return githubSetupCallbackResponse(a, c, svc)
 		}
 		installations, _ := loadInstallations(a.DB, userID)
 		connections, _ := loadConnections(a.DB, userID)
@@ -78,6 +84,98 @@ func githubSetupHandler(a *app.App, svc *Service) fiber.Handler {
 			"recommendation": capabilities.Detect(c.UserContext()).Recommendation,
 		})
 	}
+}
+
+func githubSetupCallbackResponse(a *app.App, c *fiber.Ctx, svc *Service) error {
+	setup := svc.setupInfo(a.Config, nil)
+	redirectURL := githubSetupRedirectURL(a.Config, c)
+	if strings.Contains(strings.ToLower(c.Get("Accept")), "text/html") {
+		return c.Type("html").SendString(githubSetupHTML(setup.AppName, redirectURL))
+	}
+	return response.OK(c, fiber.Map{
+		"setup":        setup,
+		"redirect_url": redirectURL,
+		"received": fiber.Map{
+			"installation_id": c.Query("installation_id"),
+			"setup_action":    c.Query("setup_action"),
+		},
+	})
+}
+
+func githubSetupRedirectURL(cfg *config.Config, c *fiber.Ctx) string {
+	base := strings.TrimSpace(cfg.FrontendURL)
+	if base == "" {
+		base = strings.TrimSpace(cfg.PublicURL)
+	}
+	if base == "" {
+		base = "/"
+	}
+	base = strings.TrimRight(base, "/")
+	query := url.Values{}
+	if v := strings.TrimSpace(c.Query("installation_id")); v != "" {
+		query.Set("installation_id", v)
+	}
+	if v := strings.TrimSpace(c.Query("setup_action")); v != "" {
+		query.Set("setup_action", v)
+	}
+	redirect := base + "/github"
+	if encoded := query.Encode(); encoded != "" {
+		redirect += "?" + encoded
+	}
+	return redirect
+}
+
+func githubSetupHTML(appName, redirectURL string) string {
+	appName = html.EscapeString(appName)
+	redirectURL = html.EscapeString(redirectURL)
+	return fmt.Sprintf(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>%s GitHub setup</title>
+  <meta http-equiv="refresh" content="0;url=%s">
+</head>
+<body style="font-family:system-ui,sans-serif;background:#0b1220;color:#e5eefb;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;">
+  <main style="max-width:560px;width:100%%;border:1px solid rgba(148,163,184,.2);border-radius:20px;padding:24px;background:rgba(15,23,42,.92);box-shadow:0 24px 80px rgba(0,0,0,.32);">
+    <h1 style="margin:0 0 8px;font-size:24px;line-height:1.2;">GitHub installation received</h1>
+    <p style="margin:0 0 16px;color:#94a3b8;">Return to %s to finish linking the installation inside SkyPort.</p>
+    <p style="margin:0;"><a href="%s" style="color:#93c5fd;">Continue to SkyPort</a></p>
+  </main>
+</body>
+</html>`, appName, redirectURL, appName, redirectURL)
+}
+
+func githubLandingHandler(a *app.App) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		redirectURL := githubFrontendGitHubURL(a.Config, c)
+		if strings.Contains(strings.ToLower(c.Get("Accept")), "text/html") {
+			return c.Type("html").SendString(githubSetupHTML(a.Config.GitHubAppName, redirectURL))
+		}
+		return c.Redirect(redirectURL, http.StatusFound)
+	}
+}
+
+func githubFrontendGitHubURL(cfg *config.Config, c *fiber.Ctx) string {
+	base := strings.TrimSpace(cfg.FrontendURL)
+	if base == "" {
+		base = strings.TrimSpace(cfg.PublicURL)
+	}
+	if base == "" {
+		base = "http://localhost:5173"
+	}
+	base = strings.TrimRight(base, "/")
+	query := url.Values{}
+	for _, key := range []string{"installation_id", "setup_action"} {
+		if v := strings.TrimSpace(c.Query(key)); v != "" {
+			query.Set(key, v)
+		}
+	}
+	redirect := base + "/github"
+	if encoded := query.Encode(); encoded != "" {
+		redirect += "?" + encoded
+	}
+	return redirect
 }
 
 func githubRepositoriesHandler(a *app.App, svc *Service) fiber.Handler {
@@ -97,7 +195,24 @@ func githubRepositoriesHandler(a *app.App, svc *Service) fiber.Handler {
 			}
 		}
 
-		repos, err := loadRepositories(a.DB, userID, installID)
+		// Parse pagination params
+		page := 1
+		perPage := 10
+		if p := strings.TrimSpace(c.Query("page")); p != "" {
+			if v, err := strconv.Atoi(p); err == nil && v > 0 {
+				page = v
+			}
+		}
+		if pp := strings.TrimSpace(c.Query("per_page")); pp != "" {
+			if v, err := strconv.Atoi(pp); err == nil && v > 0 {
+				if v > 50 {
+					v = 50
+				}
+				perPage = v
+			}
+		}
+
+		repos, err := loadRepositories(a.DB, userID, installID, page, perPage)
 		if err != nil {
 			return response.Error(c, http.StatusInternalServerError, "github_repo_list_failed", err.Error())
 		}
@@ -135,7 +250,7 @@ func githubConnectHandler(a *app.App) fiber.Handler {
 			return response.Error(c, http.StatusBadRequest, "github_connect_failed", err.Error())
 		}
 		installations, _ := loadInstallations(a.DB, userID)
-		repos, _ := loadRepositories(a.DB, userID, 0)
+		repos, _ := loadRepositories(a.DB, userID, 0, 1, 50)
 		payload := ConnectResponse{
 			Connection: map[string]any{
 				"id":              connection.ID,
@@ -155,6 +270,15 @@ func githubConnectHandler(a *app.App) fiber.Handler {
 				"status":          installation.Status,
 			}
 		}
+
+		// Sync repositories before returning so the UI can refetch immediately and
+		// get a populated list instead of racing a background goroutine.
+		svc := NewService(a.Config)
+		if err := syncRepositories(c.UserContext(), a, svc, userID, installation.ID); err != nil {
+			return response.Error(c, http.StatusBadGateway, "github_sync_failed", err.Error())
+		}
+		reposAfterSync, _ := loadRepositories(a.DB, userID, installation.ID, 1, 50)
+		payload.Repositories = len(reposAfterSync)
 		return response.JSON(c, http.StatusCreated, payload)
 	}
 }
@@ -218,16 +342,45 @@ func githubImportHandler(a *app.App, svc *Service) fiber.Handler {
 		if authType == "" {
 			authType = strings.ToLower(strings.TrimSpace(connection.AuthType))
 		}
-		if authType == "app" && installation.InstallationID > 0 {
-			token, expiresAt, tokenErr := svc.buildInstallationToken(c.UserContext(), a.Config, installation.InstallationID)
-			if tokenErr == nil && token != "" {
-				installation.AccessToken = token
-				installation.TokenExpiresAt = &expiresAt
-				_ = a.DB.Save(&installation).Error
+		cloneAuthType := authType
+		clonePAT := req.PAT
+		cloneSSHKey := req.SSHPrivateKey
+		if authType == "pat" && strings.TrimSpace(clonePAT) == "" {
+			clonePAT = strings.TrimSpace(connection.AccessToken)
+			if clonePAT == "" {
+				var user models.User
+				if err := a.DB.First(&user, userID).Error; err == nil {
+					clonePAT = strings.TrimSpace(user.GitPAT)
+				}
 			}
 		}
+		if authType == "ssh" && strings.TrimSpace(cloneSSHKey) == "" {
+			cloneSSHKey = connection.SSHPrivateKey
+			if strings.TrimSpace(cloneSSHKey) == "" {
+				var user models.User
+				if err := a.DB.First(&user, userID).Error; err == nil {
+					cloneSSHKey = user.GitSSHKey
+				}
+			}
+		}
+		if authType == "app" && installation.InstallationID > 0 {
+			token, expiresAt, tokenErr := svc.buildInstallationToken(c.UserContext(), a.Config, installation.InstallationID)
+			if tokenErr != nil {
+				_ = os.RemoveAll(targetPath)
+				return response.Error(c, http.StatusBadGateway, "github_app_token_failed", tokenErr.Error())
+			}
+			if token == "" {
+				_ = os.RemoveAll(targetPath)
+				return response.Error(c, http.StatusBadGateway, "github_app_token_failed", "github app returned an empty installation token")
+			}
+			installation.AccessToken = token
+			installation.TokenExpiresAt = &expiresAt
+			_ = a.DB.Save(&installation).Error
+			cloneAuthType = "pat"
+			clonePAT = token
+		}
 
-		if err := svc.cloneRepository(c.UserContext(), targetPath, repo.CloneURL, authType, req.SSHPrivateKey, req.PAT, repo.SelectedBranch); err != nil {
+		if err := svc.cloneRepository(c.UserContext(), targetPath, repo.CloneURL, cloneAuthType, cloneSSHKey, clonePAT, repo.SelectedBranch); err != nil {
 			_ = os.RemoveAll(targetPath)
 			return response.Error(c, http.StatusBadRequest, "github_clone_failed", err.Error())
 		}
@@ -305,6 +458,14 @@ func githubDisconnectHandler(a *app.App) fiber.Handler {
 	}
 }
 
+func optionalUserIDFromCtx(c *fiber.Ctx) (uint, bool) {
+	userID, err := auth.UserIDFromCtx(c)
+	if err != nil {
+		return 0, false
+	}
+	return userID, true
+}
+
 func githubWebhookPlaceholder() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		return response.OK(c, fiber.Map{"status": "accepted", "message": "github webhook processing is wired in a future iteration"})
@@ -337,10 +498,16 @@ func upsertConnection(db *gorm.DB, userID uint, req ImportRequest) (models.GitHu
 
 	installation := models.GitHubInstallation{UserID: userID, InstallationID: req.InstallationID, Status: "active"}
 	if req.InstallationID > 0 {
-		_ = db.Where("installation_id = ?", req.InstallationID).FirstOrCreate(&installation).Error
+		var existing models.GitHubInstallation
+		err := db.Where("user_id = ? AND (id = ? OR installation_id = ?)", userID, req.InstallationID, req.InstallationID).First(&existing).Error
+		if err == nil {
+			installation = existing
+		} else {
+			_ = db.Where("installation_id = ?", req.InstallationID).FirstOrCreate(&installation).Error
+		}
 		installation.UserID = userID
-		if conn.InstallationID != req.InstallationID {
-			conn.InstallationID = req.InstallationID
+		if conn.InstallationID != installation.InstallationID {
+			conn.InstallationID = installation.InstallationID
 			_ = db.Save(&conn).Error
 		}
 	}
@@ -371,14 +538,40 @@ func loadConnections(db *gorm.DB, userID uint) ([]map[string]any, error) {
 	return out, nil
 }
 
-func loadRepositories(db *gorm.DB, userID uint, installationID uint) ([]Repository, error) {
+func loadRepositories(db *gorm.DB, userID uint, installationID uint, page, perPage int) ([]Repository, error) {
 	q := db.Model(&models.GitHubRepository{})
+	// If caller supplied an installation identifier, it may be either the
+	// internal DB primary key (id) or the GitHub installation id (installation_id).
+	// Resolve it to the internal DB id so repository.installation_id (fk) can be matched.
 	if installationID > 0 {
-		q = q.Where("installation_id = ?", installationID)
+		var inst models.GitHubInstallation
+		// Try by internal primary key first
+		// Try either the internal id (id) or the GitHub installation id (installation_id).
+		_ = db.Where("user_id = ? AND (id = ? OR installation_id = ?)", userID, installationID, installationID).First(&inst).Error
+		if inst.ID > 0 {
+			q = q.Where("installation_id = ?", inst.ID)
+		} else {
+			// No matching installation for this user and supplied id — return empty list
+			return []Repository{}, nil
+		}
 	}
-	q = q.Joins("JOIN github_installations ON github_installations.id = github_repositories.installation_id").Where("github_installations.user_id = ?", userID)
+	// Table names used by GORM are `git_hub_installations` and `git_hub_repositories`.
+	// The previous hard-coded join used `github_installations` which does not exist,
+	// causing SQL errors like "no such table: github_installations".
+	q = q.Joins("JOIN git_hub_installations ON git_hub_installations.id = git_hub_repositories.installation_id").Where("git_hub_installations.user_id = ?", userID)
 	var rows []models.GitHubRepository
-	if err := q.Order("updated_at desc").Limit(200).Find(&rows).Error; err != nil {
+	if page <= 0 {
+		page = 1
+	}
+	if perPage <= 0 {
+		perPage = 10
+	}
+	if perPage > 50 {
+		perPage = 50
+	}
+	offset := (page - 1) * perPage
+	// Qualify updated_at to avoid ambiguity with joined tables.
+	if err := q.Order("git_hub_repositories.updated_at desc").Limit(perPage).Offset(offset).Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]Repository, 0, len(rows))
@@ -390,18 +583,52 @@ func loadRepositories(db *gorm.DB, userID uint, installationID uint) ([]Reposito
 
 func syncRepositories(ctx context.Context, a *app.App, svc *Service, userID uint, installationID uint) error {
 	var installation models.GitHubInstallation
-	q := a.DB.Where("user_id = ?", userID)
+	// Resolve installationID which may be either DB primary key or GitHub installation id.
 	if installationID > 0 {
-		q = q.Where("installation_id = ?", installationID)
-	}
-	if err := q.Order("updated_at desc").First(&installation).Error; err != nil {
-		return err
+		// Try to find an installation that matches either the internal id (id)
+		// or the GitHub installation id (installation_id). Use a single query
+		// to avoid race conditions where two back-to-back lookups could differ.
+		if err := a.DB.Where("user_id = ? AND (id = ? OR installation_id = ?)", userID, installationID, installationID).Order("git_hub_installations.updated_at desc").First(&installation).Error; err != nil {
+			return err
+		}
+	} else {
+		if err := a.DB.Where("user_id = ?", userID).Order("git_hub_installations.updated_at desc").First(&installation).Error; err != nil {
+			// If the user only configured PAT/SSH fallback credentials, create a
+			// lightweight placeholder installation so cached repositories can still
+			// be stored and listed.
+			var user models.User
+			if userErr := a.DB.First(&user, userID).Error; userErr != nil {
+				return err
+			}
+			var connForPlaceholder models.GitHubConnection
+			_ = a.DB.Where("user_id = ?", userID).Order("updated_at desc").First(&connForPlaceholder).Error
+			hasStoredPAT := strings.TrimSpace(user.GitPAT) != "" || strings.TrimSpace(connForPlaceholder.AccessToken) != ""
+			if !hasStoredPAT && strings.ToLower(strings.TrimSpace(user.GitAuthType)) != "pat" {
+				return err
+			}
+			installation = models.GitHubInstallation{UserID: userID, InstallationID: 0, Status: "active"}
+			if createErr := a.DB.Where("user_id = ? AND installation_id = 0", userID).FirstOrCreate(&installation).Error; createErr != nil {
+				return createErr
+			}
+		}
 	}
 	var conn models.GitHubConnection
 	if err := a.DB.Where("user_id = ?", userID).Order("updated_at desc").First(&conn).Error; err != nil {
 		return err
 	}
+	var user models.User
+	if err := a.DB.First(&user, userID).Error; err != nil {
+		return err
+	}
+	authType := strings.ToLower(strings.TrimSpace(conn.AuthType))
+	if authType == "" {
+		authType = strings.ToLower(strings.TrimSpace(user.GitAuthType))
+	}
 	token := strings.TrimSpace(conn.AccessToken)
+	if token == "" && strings.TrimSpace(user.GitPAT) != "" {
+		token = strings.TrimSpace(user.GitPAT)
+		authType = "pat"
+	}
 	if token == "" && installation.InstallationID > 0 {
 		var tokErr error
 		token, _, tokErr = svc.buildInstallationToken(ctx, a.Config, installation.InstallationID)
@@ -413,7 +640,10 @@ func syncRepositories(ctx context.Context, a *app.App, svc *Service, userID uint
 		return errors.New("no github access token available")
 	}
 
-	endpoint := fmt.Sprintf("%s/user/repos?per_page=100&sort=updated", svc.apiBase)
+	endpoint := fmt.Sprintf("%s/installation/repositories?per_page=100", svc.apiBase)
+	if authType == "pat" {
+		endpoint = fmt.Sprintf("%s/user/repos?per_page=100&sort=updated", svc.apiBase)
+	}
 	repos, err := fetchGitHubRepos(ctx, svc.httpClient, endpoint, token)
 	if err != nil {
 		return err
@@ -473,7 +703,13 @@ func fetchGitHubRepos(ctx context.Context, client *http.Client, endpoint, token 
 		}
 		var raw []map[string]any
 		if err := json.Unmarshal(body, &raw); err != nil {
-			return nil, err
+			var wrapped struct {
+				Repositories []map[string]any `json:"repositories"`
+			}
+			if err2 := json.Unmarshal(body, &wrapped); err2 != nil {
+				return nil, err
+			}
+			raw = wrapped.Repositories
 		}
 		if len(raw) == 0 {
 			break

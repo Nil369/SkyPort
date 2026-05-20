@@ -414,7 +414,7 @@ export const platformApi = {
     pat?: string;
     ssh_private_key?: string;
   }) => (await http.post("/github/connect", input)).data,
-  githubRepositories: async (params?: { installation_id?: number; q?: string; selected?: boolean; refresh?: boolean }) =>
+  githubRepositories: async (params?: { installation_id?: number; q?: string; selected?: boolean; refresh?: boolean; page?: number; per_page?: number }) =>
     (await http.get<{ repositories: GitHubRepository[] }>("/github/repositories", { params })).data.repositories,
   githubImport: async (input: {
     connection_id?: number;

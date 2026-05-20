@@ -1,9 +1,8 @@
-import { Outlet, Link, useLocation } from "react-router";
+import { Outlet, useLocation } from "react-router";
 
 import { Logo } from "@/components/brand/Logo";
 import { ModeToggle } from "@/components/mode-toggle";
 import { Card } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
 export function AuthLayout() {
   const location = useLocation();
@@ -42,15 +41,6 @@ export function AuthLayout() {
               <p className="text-sm text-muted-foreground">
                 Realtime infrastructure control surface — optimized for low-end VPS.
               </p>
-            </div>
-            <div className="mt-8 text-xs text-muted-foreground">
-              {isSetup ? (
-                <span>First-time setup creates the initial administrator.</span>
-              ) : (
-                <span>
-                  New install? <Link className={cn("text-primary hover:underline")} to="/setup">Run setup</Link>.
-                </span>
-              )}
             </div>
           </div>
 

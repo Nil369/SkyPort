@@ -15,7 +15,33 @@ import { marketplaceApi, type MarketplaceApp } from "@/features/marketplace/api"
 import { platformApi } from "@/features/platform/api";
 import { PERMS, can } from "@/lib/permissions";
 import { useAuthStore } from "@/stores/authStore";
-import StackIcon, { type IconName } from "tech-stack-icons";
+import StackIcon from "tech-stack-icons";
+import {
+  siStrapi,
+  siTemporal,
+  siDirectus,
+  siSupabase,
+  siGhost,
+  siMeilisearch,
+  siElasticsearch,
+  siOpensearch,
+  siForgejo,
+  siAuthentik,
+  siBitwarden,
+  siUptimekuma,
+  siN8n,
+  siPocketbase,
+  siNginx,
+  siNatsdotio,
+  siApachekafka,
+  siApachecassandra,
+  siJupyter,
+  siElixir,
+  siErlang,
+  siCplusplus,
+  siC,
+  siGitea,
+} from "simple-icons";
 
 export function MarketplacePage() {
   const user = useAuthStore((s) => s.user);
@@ -443,9 +469,9 @@ export function MarketplacePage() {
           onClick={(e) => e.target === e.currentTarget && (setSelected(null), setWizardOpen(false))}
         >
           <Card className="max-h-[92vh] w-full max-w-3xl overflow-y-auto border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            {selected.image_url && getIconNameForApp(selected.slug) ? (
-              <div className="h-48 w-full bg-linear-to-br from-slate-900 via-slate-800 to-slate-950 flex items-center justify-center">
-                <StackIcon name={getIconNameForApp(selected.slug)!} variant="dark" className="size-32" />
+            {resolveMarketplaceIcon(selected) ? (
+              <div className="h-48 w-full flex items-center justify-center bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-600 dark:to-slate-800">
+                <MarketplaceAppIcon app={selected} variant="hero" />
               </div>
             ) : null}
             <CardHeader className="pb-2">
@@ -523,9 +549,9 @@ export function MarketplacePage() {
                     <Button variant={installMethod === "docker" ? "default" : "outline"} size="sm" onClick={() => setInstallMethod("docker")}>
                       Docker (recommended)
                     </Button>
-                    <Button 
-                      variant={installMethod === "native" ? "default" : "outline"} 
-                      size="sm" 
+                    <Button
+                      variant={installMethod === "native" ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setInstallMethod("native")}
                       disabled={!mapCatalogRuntimeToInstaller(selected)}
                     >
@@ -671,29 +697,27 @@ function MarketplaceCard({
   canInstall: boolean;
   onTagSearch: (value: string) => void;
 }) {
-  const iconName = getIconNameForApp(app.slug);
   return (
     <Card className="overflow-hidden border-border/60 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-      {app.image_url ? (
-        <div className="relative flex h-44 items-center justify-center overflow-hidden bg-linear-to-br from-slate-900 via-slate-800 to-slate-950">
-          {iconName ? (
-            <div className="transition-transform duration-300 hover:scale-110">
-              <StackIcon name={iconName} variant="light" className="size-24 opacity-95" />
-            </div>
-          ) : (
-            <div className="flex size-24 items-center justify-center rounded-full border border-white/10 bg-white/5 text-3xl font-semibold text-white/90">
-              {app.name.slice(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div className="absolute inset-0 bg-linear-to-t from-slate-950/80 via-transparent to-transparent" />
+      {resolveMarketplaceIcon(app) ? (
+        <div className="relative flex h-44 items-center justify-center overflow-hidden bg-linear-to-b from-slate-100 via-slate-50/50 to-white dark:bg-linear-to-br dark:from-slate-900 dark:via-slate-600 dark:to-slate-800">
+          <div className="transition-transform duration-300 hover:scale-110">
+            <MarketplaceAppIcon app={app} variant="card" />
+          </div>
+
+          {/* FIX 1: Made the shadow overlay light/transparent in light mode, and dark slate in dark mode */}
+          <div className="absolute inset-0 bg-linear-to-t from-white/90 via-white/20 to-transparent dark:from-slate-950/80 dark:via-transparent dark:to-transparent" />
+
           <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
             {app.featured ? <Badge variant="success">Featured</Badge> : <span />}
             {app.trending ? <Badge variant="warning">Trending</Badge> : null}
           </div>
+
           <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 p-3">
             <div>
-              <h3 className="text-sm font-semibold text-white">{app.name}</h3>
-              <p className="text-xs text-slate-300">{app.category}</p>
+              {/* FIX 2: Dynamic text color (Dark text for light mode, White text for dark mode) */}
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{app.name}</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-300">{app.category}</p>
             </div>
           </div>
         </div>
@@ -763,132 +787,279 @@ function parseMemoryToBytes(value: string) {
   return numeric;
 }
 
-// Mapping of app slugs to tech-stack-icons names
-// Comprehensive mapping for all marketplace apps
+
+// REPLACE YOUR ENTIRE MarketplaceIconSpec + MarketplaceAppIcon + resolveMarketplaceIcon SECTION WITH THIS
+
+type MarketplaceIconSpec =
+  | { kind: "stack"; name: string }
+  | { kind: "simple"; icon: { path: string; hex: string } }
+  | { kind: "url"; src: string }
+  | { kind: "generic"; label: string };
+
+function MarketplaceAppIcon({
+  app,
+  variant,
+}: {
+  app: MarketplaceApp;
+  variant: "card" | "hero";
+}) {
+  const icon = resolveMarketplaceIcon(app);
+
+  const sizeClass =
+    variant === "hero"
+      ? "size-32"
+      : "size-24 opacity-95";
+
+  if (icon.kind === "stack") {
+    return (
+      <StackIcon
+        name={icon.name as any}
+        variant="light"
+        className={`${sizeClass} drop-shadow-xl`}
+      />
+    );
+  }
+
+  if (icon.kind === "simple") {
+    return (
+      <svg
+        role="img"
+        aria-label={app.name}
+        viewBox="0 0 24 24"
+        xmlns="http://www.w3.org/2000/svg"
+        className={`${sizeClass} drop-shadow-xl`}
+        style={{
+          color: `#${icon.icon.hex}`,
+        }}
+        fill="currentColor"
+      >
+        <path d={icon.icon.path} />
+      </svg>
+    );
+  }
+
+  if (icon.kind === "url") {
+    return (
+      <img
+        src={icon.src}
+        alt={app.name}
+        loading="lazy"
+        draggable={false}
+        className={`${sizeClass} object-contain`}
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${variant === "hero"
+        ? "size-32 text-4xl"
+        : "size-24 text-3xl"
+        } flex items-center justify-center rounded-full border border-white/10 bg-white/5 font-semibold text-white/90`}
+    >
+      {icon.label}
+    </div>
+  );
+}
+
+function resolveMarketplaceIcon(
+  app: MarketplaceApp,
+): MarketplaceIconSpec {
+  const candidates = [
+    app.slug,
+    app.name,
+    app.runtime,
+    ...(app.tags ?? []),
+  ]
+    .map(normalizeIconKey)
+    .filter(Boolean);
+
+  // SIMPLE ICONS FIRST
+  for (const key of candidates) {
+    const icon = SIMPLE_ICON_MAP[key];
+
+    if (icon?.path) {
+      return {
+        kind: "simple",
+        icon,
+      };
+    }
+  }
+
+  // CUSTOM URL ICONS SECOND
+  for (const key of candidates) {
+    const src = APP_ICON_URL_MAP[key];
+
+    if (src) {
+      return {
+        kind: "url",
+        src,
+      };
+    }
+  }
+
+  // TECH STACK ICONS LAST
+  for (const key of candidates) {
+    const stackName = TECH_STACK_ICON_MAP[key];
+
+    if (stackName) {
+      return {
+        kind: "stack",
+        name: stackName,
+      };
+    }
+  }
+
+  // FALLBACK
+  return {
+    kind: "generic",
+    label: app.name.slice(0, 2).toUpperCase(),
+  };
+}
+
+function normalizeIconKey(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[\s_+.]/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// First preference: tech-stack-icons names that are known to render well.
 const TECH_STACK_ICON_MAP: Record<string, string> = {
-  // Databases
   "postgresql": "postgresql",
   "postgres": "postgresql",
   "mysql": "mysql",
   "mariadb": "mariadb",
   "mongodb": "mongodb",
   "redis": "redis",
-  "valkey": "redis",  // Valkey is Redis-compatible, use redis icon
+  "redis-stack": "redis",
+  "valkey": "redis",
   "influxdb": "influxdb",
-  "cassandra": "cassandradb",
-
-  // Runtimes
-  "node-runtime": "nodejs",
+  "node-runtime": "nodejs2",
+  "node": "nodejs2",
+  "nodejs": "nodejs2",
+  "node-js": "nodejs2",
   "bun-runtime": "bunjs",
-  "deno-runtime": "deno",
+  "bun": "bunjs",
+  "bunjs": "bunjs",
   "python-runtime": "python",
+  "python": "python",
   "go-runtime": "go",
+  "go": "go",
+  "golang": "go",
   "php-runtime": "php",
+  "php": "php",
   "java-runtime": "java",
-
-  // Frontend Frameworks
-  "nextjs": "nextjs",
+  "java": "java",
   "nuxt": "nuxtjs",
   "astro": "astro",
   "vite": "vitejs",
+  "vitejs": "vitejs",
   "react-static": "react",
+  "react": "react",
   "vue-static": "vuejs",
-
-  // CMS
+  "vue": "vue",
+  "vuejs": "vuejs",
   "wordpress": "wordpress",
   "appwrite": "appwrite",
-
-  // Monitoring
-  "uptime-kuma": "uptimekuma",
   "grafana": "grafana",
   "prometheus": "prometheus",
-  "loki": "loki",
-  "netdata": "netdata",
-
-  // DevOps & Storage
   "docker-registry": "docker",
+  "docker": "docker",
   "minio": "minio",
   "portainer-agent": "portainer",
-  "gitea": "gitea",
-  "drone-ci": "drone",
   "jenkins": "jenkins",
-  "filebrowser": "filebrowser",
-  "nextcloud": "nextjs",
-
-  // Messaging
   "rabbitmq": "rabbitmq",
   "kafka": "kafka",
-  "nats": "nats",
-
-  // Networking
   "nginx": "nginx",
-  "traefik": "traefik",
-  "caddy": "caddy",
-
-  // Security
-  "vaultwarden": "bitwarden",
-  "authentik": "authentik",
   "keycloak": "keycloak",
-
-  // Analytics
   "plausible": "plausible",
   "umami": "umami",
-  "metabase": "metabase",
-
-  // Developer Tools
   "vscode-server": "vscode",
   "code-server": "vscode",
-  "jupyterlab": "jupyter",
-
-  // Fallback mappings
-  "nodejs": "nodejs2",
-  "node-js": "nodejs2",
-  "python": "python",
-  "java": "java",
-  "go": "go",
-  "golang": "go",
   "rust": "rust",
-  "php": "php",
   "dotnet": "dotnet",
   "ruby": "ruby",
-  "bun": "bunjs",
-  "bunjs": "bunjs",
-  "deno": "deno",
-  "next": "nextjs",
-  "react": "react",
-  "vue": "vue",
   "angular": "angular",
-  "vitejs": "vitejs",
-  "docker": "docker",
   "kubernetes": "kubernetes",
   "k8s": "kubernetes",
   "terraform": "terraform",
   "gitlab": "gitlab",
   "github": "github",
-  "mosquitto": "mosquitto",
-  "datadog": "datadog",
-  "newrelic": "newrelic",
-  "sentry": "sentry",
-  "logstash": "logstash",
-  "kibana": "kibana",
 };
 
-function getAppIconName(slug: string): string {
-  const normalized = slug.toLowerCase();
-  if (TECH_STACK_ICON_MAP[normalized]) {
-    return TECH_STACK_ICON_MAP[normalized];
-  }
-  for (const [key, value] of Object.entries(TECH_STACK_ICON_MAP)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return value;
-    }
-  }
-  return normalized;
-}
+// Second preference: colored simple-icons fallback.
+// REPLACE YOUR ENTIRE SIMPLE_ICON_MAP WITH THIS
 
-function getIconNameForApp(slug: string): IconName | null {
-  return getAppIconName(slug) as IconName;
-}
+const SIMPLE_ICON_MAP: Record<
+  string,
+  { path: string; hex: string }
+> = {
+  cassandra: siApachecassandra,
+  directus: siDirectus,
+  strapi: siStrapi,
+  ghost: siGhost,
+  supabase: siSupabase,
+  meilisearch: siMeilisearch,
+  elasticsearch: siElasticsearch,
+  opensearch: siOpensearch,
+  forgejo: siForgejo,
+  temporal: siTemporal,
+  "apache-kafka": siApachekafka,
+  kafka: siApachekafka,
+  authentik: siAuthentik,
+  vaultwarden: siBitwarden,
+  "uptime-kuma": siUptimekuma,
+  n8n: siN8n,
+  pocketbase: siPocketbase,
+  nginx: siNginx,
+  nats: siNatsdotio,
+  "c-plus-plus": siCplusplus,
+  c: siC,
+  elixir: siElixir,
+  erlang: siErlang,
+  jupyterlab: siJupyter,
+  jupyter: siJupyter,
+  gitea: siGitea,
+};
+
+// Third preference: paste image URLs here for apps with no package icon.
+// REPLACE YOUR ENTIRE APP_ICON_URL_MAP WITH THIS
+
+const APP_ICON_URL_MAP: Record<string, string> = {
+  "coolify-agent": "https://docs.hetzner.com/static/1dbc8e5220638f7193ef9f5a24c2eb5b/0b533/coolify-logo.png",
+  coolify: "https://docs.hetzner.com/static/1dbc8e5220638f7193ef9f5a24c2eb5b/0b533/coolify-logo.png",
+  victoriametrics: "https://raw.githubusercontent.com/alex-red/unraid-ca-templates/master/templates/images/victoria-metrics-logo.png",
+  "redis-stack": "https://redis.io/wp-content/uploads/2024/04/Logotype.svg",
+  redis: "https://redis.io/wp-content/uploads/2024/04/Logotype.svg",
+  "code-server": "https://dashboard.snapcraft.io/site_media/appmedia/2021/09/code-server.png",
+  "docker-registry": "https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png",
+  docker: "https://www.docker.com/wp-content/uploads/2022/03/Moby-logo.png",
+  portainer: "https://www.portainer.io/hubfs/Brand%20Assets/Logos/PNG/portainer-logo-mark-blue.png",
+  "portainer-agent": "https://repository-images.githubusercontent.com/646947691/fb16b861-479d-4bfc-b8b1-185a1e7be212",
+  appwrite: "https://privacyshortlist.com/products/appwrite.svg",
+  minio: "https://artifacthub.io/image/aec2a822-2a3f-41a6-8a71-57c5d75d011e@3x",
+  keycloak: "https://www.e-time.it/wp-content/uploads/2022/03/Keycloak_logo-300x200.webp",
+  jenkins: "https://www.jenkins.io/images/logos/jenkins/jenkins.svg",
+  gitea: "https://avatars.githubusercontent.com/u/12724356?s=280&v=4",
+  rabbitmq: "https://www.rabbitmq.com/img/rabbitmq-logo.svg",
+  kafka: "https://cdn.worldvectorlogo.com/logos/apache-kafka.svg",
+  n8n: "https://raw.githubusercontent.com/n8n-io/n8n/master/assets/n8n-logo.png",
+  ollama: "https://www.techspot.com/images2/downloads/topdownload/2025/06/2025-06-22-ts3_thumbs-e23.png",
+  influxdb: "https://www.niagaramarketplace.com/media/catalog/product/cache/8ec2f9f1aafbe7f04b9376f56dd1d327/m/a/marketplace_icons_13_.png",
+  typesense: "https://logowik.com/content/uploads/images/typesense1721419237.logowik.com.webp",
+  appsmith: "https://avatars.githubusercontent.com/u/67620218?s=280&v=4",
+  budibase: "https://avatars.githubusercontent.com/u/45009727?s=200&v=4",
+  deno: "https://raw.githubusercontent.com/denoland/vscode_deno/main/deno.png",
+  nextjs: "https://marcbruederlin.gallerycdn.vsassets.io/extensions/marcbruederlin/next-icons/0.1.0/1723747598319/Microsoft.VisualStudio.Services.Icons.Default",
+  umami: "https://play-lh.googleusercontent.com/-Ac9NY3nlojZ7D4Iq0YkCroRoOE4K15EKpuuj0sGjzOtwodXAsJaeuEcyrLX4H6g7f_DQi4LuYxZIjQLPN9o2B8=w240-h480-rw"
+};
 
 function MarketplaceShelf({
   title,

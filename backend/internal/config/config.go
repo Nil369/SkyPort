@@ -55,6 +55,7 @@ type Config struct {
 	GitHubAppPrivateKey string
 	GitHubAPIBaseURL    string
 	GitHubWebBaseURL    string
+	FrontendURL         string
 }
 
 // Load reads .env when present (local dev), then environment variables.
@@ -105,6 +106,7 @@ func Load() (*Config, error) {
 		GitHubAppPrivateKey: getEnv("GITHUB_APP_PRIVATE_KEY", ""),
 		GitHubAPIBaseURL:    getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
 		GitHubWebBaseURL:    getEnv("GITHUB_WEB_BASE_URL", "https://github.com"),
+		FrontendURL:         getEnv("SKYPORT_FRONTEND_URL", "*"),
 	}
 
 	if err := cfg.validate(); err != nil {

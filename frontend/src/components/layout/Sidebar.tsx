@@ -43,6 +43,7 @@ type NavItem = { to: string; label: string; icon: React.ComponentType<{ classNam
 
 const items: NavItem[] = [
   { to: "/overview", label: "Overview", icon: LayoutDashboard },
+  { to: "/github", label: "GitHub", icon: GitBranch },
   { to: "/projects", label: "Projects", icon: Boxes },
   { to: "/deployments", label: "Deployments", icon: Rocket },
   { to: "/files", label: "Files", icon: FolderTree, need: PERMS.filesystemRead },
@@ -53,7 +54,6 @@ const items: NavItem[] = [
   { to: "/domains", label: "Domains", icon: Globe },
   { to: "/metrics", label: "Metrics", icon: Activity, need: PERMS.metricsView },
   { to: "/marketplace", label: "Marketplace", icon: Store },
-  { to: "/github", label: "GitHub", icon: GitBranch },
   { to: "/team", label: "Team", icon: Users, need: PERMS.usersManage },
   { to: "/servers", label: "Cluster", icon: Server, need: PERMS.serversManage },
 ];
