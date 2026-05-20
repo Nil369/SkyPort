@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, ArrowLeft, Upload, Download } from "lucide-react";
+import { ChevronRight, ArrowLeft, Upload, Download, FolderOpen, FolderPlus, SquareTerminal, FilePlus2, PencilLine, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ResizablePanels } from "@/components/layout/ResizablePanels";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { CodeExplorerTree } from "@/features/code-editor/components/CodeExplorerTree";
@@ -15,6 +17,10 @@ import { FilePreview } from "@/features/code-editor/components/FilePreview";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
+import { TerminalEmulator } from "@/features/terminal/components/TerminalEmulator";
+
+type UploadEntry = { file: File; relativePath?: string };
+type ContextTarget = { path: string; name: string; isDir: boolean };
 
 export function CodeEditorPage() {
   const qc = useQueryClient();
@@ -29,6 +35,14 @@ export function CodeEditorPage() {
   const [previewUrl, setPreviewUrl] = React.useState("");
   const [savedCode, setSavedCode] = React.useState("");
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
+  const folderInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [terminalOpen, setTerminalOpen] = React.useState(false);
+  const [uploadTargetPath, setUploadTargetPath] = React.useState("");
+  const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; item: ContextTarget } | null>(null);
+  const [renameTarget, setRenameTarget] = React.useState<ContextTarget | null>(null);
+  const [renameValue, setRenameValue] = React.useState("");
+  const [deleteTarget, setDeleteTarget] = React.useState<ContextTarget | null>(null);
+  const [newName, setNewName] = React.useState("");
 
   const readFile = useMutation({
     mutationFn: platformApi.readFile,
@@ -49,9 +63,9 @@ export function CodeEditorPage() {
   });
 
   const uploadFiles = useMutation({
-    mutationFn: async ({ path, files }: { path: string; files: File[] }) => {
+    mutationFn: async ({ path, files }: { path: string; files: UploadEntry[] }) => {
       for (const file of files) {
-        await platformApi.uploadFile(path, file);
+        await platformApi.uploadFile(path, file.file, { relativePath: file.relativePath });
       }
       return files.length;
     },
@@ -62,8 +76,61 @@ export function CodeEditorPage() {
     onError: () => toast.error("Upload failed"),
   });
 
+  const createFile = useMutation({
+    mutationFn: ({ basePath, filename }: { basePath: string; filename: string }) => platformApi.createFile(basePath, filename),
+    onSuccess: () => {
+      setNewName("");
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
+    },
+    onError: () => toast.error("Create file failed"),
+  });
+
+  const createFolder = useMutation({
+    mutationFn: (path: string) => platformApi.createFolder(path),
+    onSuccess: () => {
+      setNewName("");
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
+    },
+    onError: () => toast.error("Create folder failed"),
+  });
+
+  const deleteFile = useMutation({
+    mutationFn: (path: string) => platformApi.deleteFile(path),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
+      toast.success("Deleted");
+    },
+    onError: () => toast.error("Delete failed"),
+  });
+
+  const renameFile = useMutation({
+    mutationFn: ({ oldPath, newPath }: { oldPath: string; newPath: string }) => platformApi.renameFile(oldPath, newPath),
+    onSuccess: () => {
+      setRenameTarget(null);
+      setRenameValue("");
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
+      toast.success("Renamed");
+    },
+    onError: () => toast.error("Rename failed"),
+  });
+
   const selectedLanguage = React.useMemo(() => detectLanguage(selectedPath), [selectedPath]);
   const isDirty = !!selectedPath && !previewUrl && code !== savedCode;
+
+  const openUploadForPath = React.useCallback((path: string, includeFolder = false) => {
+    setUploadTargetPath(path);
+    if (includeFolder) {
+      folderInputRef.current?.click();
+      return;
+    }
+    uploadInputRef.current?.click();
+  }, []);
+
+  const openRenameDialog = React.useCallback((item: ContextTarget) => {
+    setRenameTarget(item);
+    setRenameValue(item.name);
+  }, []);
 
   React.useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -79,7 +146,11 @@ export function CodeEditorPage() {
 
   return (
     <PageShell className="max-w-350">
-      <PageHeader title="Code Editor" subtitle="Open project source code and edit files" />
+      <PageHeader
+        title="Code Editor"
+        subtitle="Open project source code, edit files, and toggle a workspace terminal below the editor."
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>Select project</CardTitle>
@@ -98,6 +169,7 @@ export function CodeEditorPage() {
               setPreviewUrl("");
               setCode("");
               setSavedCode("");
+              setTerminalOpen(false);
             }}
           >
             <option value="">Choose project path</option>
@@ -120,10 +192,12 @@ export function CodeEditorPage() {
               if (!p) return;
               setExplorerRoot(p);
               setActiveDirPath(p);
+              setProjectPath(p);
               setSelectedPath("");
               setPreviewUrl("");
               setCode("");
               setSavedCode("");
+              setTerminalOpen(false);
             }}
           >
             Open custom path
@@ -131,21 +205,67 @@ export function CodeEditorPage() {
           <Button variant="outline" onClick={() => void qc.invalidateQueries({ queryKey: ["code-editor-files"] })} disabled={!explorerRoot}>
             Refresh
           </Button>
+          <Input className="max-w-60" placeholder="new file/folder name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const basePath = activeDirPath || explorerRoot || projectPath;
+              if (!basePath || !newName.trim()) return;
+              createFolder.mutate(joinFsPath(basePath, newName.trim()));
+            }}
+            disabled={!newName.trim() || !explorerRoot}
+          >
+            <FolderPlus className="size-4" />
+            New folder
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              const basePath = activeDirPath || explorerRoot || projectPath;
+              if (!basePath || !newName.trim()) return;
+              createFile.mutate({ basePath, filename: newName.trim() });
+            }}
+            disabled={!newName.trim() || !explorerRoot}
+          >
+            <FilePlus2 className="size-4" />
+            New file
+          </Button>
           <input
             ref={uploadInputRef}
             type="file"
             className="hidden"
             multiple
             onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              if (!files.length || !activeDirPath) return;
-              uploadFiles.mutate({ path: activeDirPath, files });
+              const files = Array.from(e.target.files ?? []).map((file) => ({ file }));
+              if (!files.length || !uploadTargetPath) return;
+              uploadFiles.mutate({ path: uploadTargetPath, files });
               e.currentTarget.value = "";
             }}
           />
-          <Button variant="outline" onClick={() => uploadInputRef.current?.click()} disabled={!activeDirPath || uploadFiles.isPending}>
+          <input
+            ref={folderInputRef}
+            type="file"
+            className="hidden"
+            multiple
+            {...({ webkitdirectory: "true", directory: "true" } as any)}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []).map((file) => ({
+                file,
+                relativePath: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+              }));
+              if (!files.length || !uploadTargetPath) return;
+              uploadFiles.mutate({ path: uploadTargetPath, files });
+              e.currentTarget.value = "";
+            }}
+          />
+          <Button variant="outline" onClick={() => openUploadForPath(activeDirPath || explorerRoot || projectPath)} disabled={!explorerRoot || uploadFiles.isPending}>
             <Upload className="size-4" />
             Upload
+          </Button>
+          <Button variant="outline" onClick={() => openUploadForPath(activeDirPath || explorerRoot || projectPath, true)} disabled={!explorerRoot || uploadFiles.isPending}>
+            <FolderOpen className="size-4" />
+            Folder upload
           </Button>
           <Button variant="outline" onClick={() => selectedPath && handleDownload(selectedPath, token)} disabled={!selectedPath}>
             <Download className="size-4" />
@@ -157,113 +277,212 @@ export function CodeEditorPage() {
           >
             Save file (Ctrl/Cmd+S)
           </Button>
+          <Button variant={terminalOpen ? "default" : "outline"} onClick={() => setTerminalOpen((value) => !value)} disabled={!explorerRoot}>
+            <SquareTerminal className="size-4" />
+            {terminalOpen ? "Hide terminal" : "Toggle terminal"}
+          </Button>
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
-        <CardContent className="p-0">
-          <div className="h-[68vh]">
-            <ResizablePanels
-              left={
-                <div className="flex h-full flex-col border-r border-border/60">
-                  <div className="shrink-0 mb-2 flex items-center gap-1 border-b border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                    <button
-                      type="button"
-                      className="rounded px-1 py-0.5 hover:bg-muted"
-                      onClick={() => {
-                        const next = parentFsPath(explorerRoot);
-                        if (!next || next === explorerRoot) return;
-                        setExplorerRoot(next);
-                        setActiveDirPath(next);
-                        setCustomPath(next);
-                      }}
-                      disabled={!explorerRoot}
-                    >
-                      Up
-                    </button>
-                    <ChevronRight className="size-3 shrink-0" />
-                    <span className="truncate font-mono" title={activeDirPath || explorerRoot}>
-                      {activeDirPath || explorerRoot || projectPath || "No folder selected"}
-                    </span>
-                  </div>
-                  <div className="h-[calc(68vh-36px)] overflow-y-auto p-2" style={{ scrollbarGutter: 'stable' }}>
-                    <CodeExplorerTree
-                      rootPath={explorerRoot}
-                      depth={0}
-                      activeDirPath={activeDirPath}
-                      selectedPath={selectedPath}
-                      onOpenDirectory={(path) => {
-                        setActiveDirPath(path);
-                        setCustomPath(path);
-                      }}
-                      onOpenFile={(item) => {
-                        setSelectedPath(item.path);
-                        if (isPreviewable(item.path)) {
-                          setPreviewUrl(buildPreviewUrl(item.path, token));
-                          setCode("");
-                          setSavedCode("");
-                          return;
-                        }
-                        setPreviewUrl("");
-                        readFile.mutate(item.path);
-                      }}
-                    />
-                  </div>
-                </div>
-              }
-              right={
-                <div className="h-full">
-                  <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                    <span className="truncate">{selectedPath || "No file selected"}</span>
-                    <div className="flex items-center gap-2">
-                      {selectedPath ? (
-                        <Button size="sm" variant="outline" onClick={() => handleDownload(selectedPath, token)}>
-                          <Download className="size-4" />
-                          Download
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
+      <div className="mt-4 space-y-4">
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="h-[68vh]">
+              <ResizablePanels
+                left={
+                  <div className="flex h-full flex-col border-r border-border/60">
+                    <div className="shrink-0 mb-2 flex items-center gap-1 border-b border-border/60 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+                      <button
+                        type="button"
+                        className="rounded px-1 py-0.5 hover:bg-muted"
                         onClick={() => {
-                          setSelectedPath("");
-                          setPreviewUrl("");
-                          setCode("");
-                          setSavedCode("");
+                          const next = parentFsPath(explorerRoot);
+                          if (!next || next === explorerRoot) return;
+                          setExplorerRoot(next);
+                          setActiveDirPath(next);
+                          setCustomPath(next);
+                          setProjectPath(next);
                         }}
+                        disabled={!explorerRoot}
                       >
-                        <ArrowLeft className="size-4" />
-                        Back
-                      </Button>
+                        Up
+                      </button>
+                      <ChevronRight className="size-3 shrink-0" />
+                      <span className="truncate font-mono" title={activeDirPath || explorerRoot}>
+                        {activeDirPath || explorerRoot || projectPath || "No folder selected"}
+                      </span>
+                    </div>
+                    <div className="h-[calc(70vh-40px)] overflow-y-auto p-2" style={{ scrollbarGutter: "stable" }}>
+                      <CodeExplorerTree
+                        rootPath={explorerRoot}
+                        depth={0}
+                        activeDirPath={activeDirPath}
+                        selectedPath={selectedPath}
+                        onOpenDirectory={(path) => {
+                          setActiveDirPath(path);
+                          setCustomPath(path);
+                        }}
+                        onOpenFile={(item) => {
+                          setSelectedPath(item.path);
+                          if (isPreviewable(item.path)) {
+                            setPreviewUrl(buildPreviewUrl(item.path, token));
+                            setCode("");
+                            setSavedCode("");
+                            return;
+                          }
+                          setPreviewUrl("");
+                          readFile.mutate(item.path);
+                        }}
+                        onContextMenu={(item, x, y) => setContextMenu({ x, y, item: { path: item.path, name: item.name, isDir: item.is_dir } })}
+                      />
                     </div>
                   </div>
-                  <div className="h-[calc(68vh-37px)]">
-                    {previewUrl ? (
-                      <FilePreview 
-                        url={previewUrl} 
-                        path={selectedPath} 
-                        onDownload={() => handleDownload(selectedPath, token)} 
-                      />
-                    ) : (
-                      <div className="h-full flex flex-col min-h-0">
-                        <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-                          <span className="truncate">{selectedPath ? `Editing ${selectedPath}` : "Select a file to start editing"}</span>
-                          <span>
-                            {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
-                          </span>
-                        </div>
-                        <div className="flex-1 overflow-hidden min-h-0">
-                          <CodeEditor value={code} onChange={setCode} language={selectedLanguage} />
-                        </div>
+                }
+                right={
+                  <div className="h-full">
+                    <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                      <span className="truncate">{selectedPath || "No file selected"}</span>
+                      <div className="flex items-center gap-2">
+                        {selectedPath ? (
+                          <Button size="sm" variant="outline" onClick={() => handleDownload(selectedPath, token)}>
+                            <Download className="size-4" />
+                            Download
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedPath("");
+                            setPreviewUrl("");
+                            setCode("");
+                            setSavedCode("");
+                          }}
+                        >
+                          <ArrowLeft className="size-4" />
+                          Back
+                        </Button>
                       </div>
-                    )}
+                    </div>
+                    <div className="h-[calc(68vh-37px)]">
+                      {previewUrl ? (
+                        <FilePreview
+                          url={previewUrl}
+                          path={selectedPath}
+                          onDownload={() => handleDownload(selectedPath, token)}
+                        />
+                      ) : (
+                        <div className="flex h-full min-h-0 flex-col">
+                          <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+                            <span className="truncate">{selectedPath ? `Editing ${selectedPath}` : "Select a file to start editing"}</span>
+                            <span>
+                              {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
+                            </span>
+                          </div>
+                          <div className="min-h-0 flex-1 overflow-hidden">
+                            <CodeEditor value={code} onChange={setCode} language={selectedLanguage} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              }
-            />
-          </div>
-        </CardContent>
-      </Card>
+                }
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {terminalOpen ? (
+          <Card className="overflow-hidden border-border/70">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
+              <CardTitle className="text-base">Workspace terminal</CardTitle>
+              <div className="text-xs text-muted-foreground truncate">{explorerRoot || projectPath || customPath || "No workspace selected"}</div>
+            </CardHeader>
+            <CardContent className="h-85 p-2 pt-0">
+              <TerminalEmulator workingDirectory={explorerRoot || projectPath || customPath} />
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+
+      <Dialog open={Boolean(renameTarget)} onOpenChange={(open) => !open && setRenameTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename {renameTarget?.isDir ? "folder" : "file"}</DialogTitle>
+            <DialogDescription>Enter a new name. The item stays in its current parent folder.</DialogDescription>
+          </DialogHeader>
+          <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} placeholder="New name" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!renameTarget || !renameValue.trim()) return;
+                const nextPath = joinFsPath(parentFsPath(renameTarget.path), renameValue.trim());
+                renameFile.mutate({ oldPath: renameTarget.path, newPath: nextPath });
+              }}
+              disabled={renameFile.isPending}
+            >
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {deleteTarget?.isDir ? "folder" : "file"}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.name ?? "This item"} will be removed from the workspace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) deleteFile.mutate(deleteTarget.path);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {contextMenu ? (
+        <div
+          className="fixed z-50 min-w-48 rounded-lg border border-border/80 bg-background p-1 shadow-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setSelectedPath(contextMenu.item.path); setPreviewUrl(""); setCode(""); readFile.mutate(contextMenu.item.path); setContextMenu(null); }}>
+            <ArrowLeft className="size-4" /> Open
+          </button>
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); openRenameDialog(contextMenu.item); }}>
+            <PencilLine className="size-4" /> Rename
+          </button>
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); setDeleteTarget(contextMenu.item); }}>
+            <Trash2 className="size-4" /> Delete
+          </button>
+          {contextMenu.item.isDir ? (
+            <>
+              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); const basePath = contextMenu.item.path; if (newName.trim()) createFile.mutate({ basePath, filename: newName.trim() }); }}>
+                <FilePlus2 className="size-4" /> New file
+              </button>
+              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); const basePath = contextMenu.item.path; if (newName.trim()) createFolder.mutate(joinFsPath(basePath, newName.trim())); }}>
+                <FolderPlus className="size-4" /> New folder
+              </button>
+              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); openUploadForPath(contextMenu.item.path); }}>
+                <Upload className="size-4" /> Upload file
+              </button>
+              <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); openUploadForPath(contextMenu.item.path, true); }}>
+                <FolderOpen className="size-4" /> Upload folder
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </PageShell>
   );
 }
@@ -279,6 +498,11 @@ function parentFsPath(p: string): string {
     return head ? `${head}/` : normalized;
   }
   return "/";
+}
+
+function joinFsPath(base: string, name: string) {
+  const normalizedBase = base.replace(/\\/g, "/").replace(/\/+$/, "");
+  return `${normalizedBase}/${name}`;
 }
 
 function isPreviewable(path: string) {
@@ -310,15 +534,34 @@ function handleDownload(path: string, token?: string | null) {
   a.click();
 }
 function detectLanguage(path: string) {
-  const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  if (["ts", "tsx", "js", "jsx"].includes(ext)) return "typescript";
+  const normalized = path.replace(/\\/g, "/").toLowerCase();
+  const base = normalized.split("/").pop() ?? "";
+  if (base === "package.json" || base === "tsconfig.json" || base === "jsconfig.json" || base === ".eslintrc" || base === ".prettierrc") return "json";
+  if (base === ".gitignore" || base.endsWith(".gitignore")) return "gitignore";
+  if (base.endsWith(".sh") || base.endsWith(".bash") || base.endsWith(".zsh") || base.endsWith(".ps1") || base.endsWith(".cmd") || base.endsWith(".bat")) return "shell";
+  const ext = base.split(".").pop() ?? "";
+  if (["ts", "tsx"].includes(ext)) return "typescript";
+  if (["js", "jsx"].includes(ext)) return "javascript";
   if (["json"].includes(ext)) return "json";
   if (["md"].includes(ext)) return "markdown";
   if (["py"].includes(ext)) return "python";
+  if (["java","class"].includes(ext)) return "java";
+  if (["php"].includes(ext)) return "php";
+  if (["go"].includes(ext)) return "go";
+  if (["rs"].includes(ext)) return "rust";
+  if (["c", "h","C", "H"].includes(ext)) return "c";
+  if (["cpp", "hpp","C++"].includes(ext)) return "cpp";
+  if (["cs"].includes(ext)) return "csharp";
+  if (["rb"].includes(ext)) return "ruby";
+  if (["Dockerfile"].includes(ext)) return "dockerfile";
+  if (["ini"].includes(ext)) return "ini";
+  if (["env"].includes(ext)) return "dotenv";
+  if (["log"].includes(ext)) return "log";
+  if (["dockercompose", "yaml", "yml"].includes(ext)) return "yaml";
   if (["css", "scss"].includes(ext)) return "css";
   if (["html", "htm"].includes(ext)) return "html";
   if (["yml", "yaml"].includes(ext)) return "yaml";
   if (["xml", "svg"].includes(ext)) return "xml";
   if (["sql"].includes(ext)) return "sql";
-  return "typescript";
+  return "text";
 }

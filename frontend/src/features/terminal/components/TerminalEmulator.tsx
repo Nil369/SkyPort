@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/authStore";
 import { useWebSocket } from "@/services/ws/useWebSocket";
 
-export function TerminalEmulator() {
+type Props = {
+  workingDirectory?: string;
+};
+
+export function TerminalEmulator({ workingDirectory }: Props) {
   const { effectiveTheme } = useTheme();
   const token = useAuthStore((s) => s.accessToken);
   const { hub, getStatus } = useWebSocket();
@@ -25,7 +29,7 @@ export function TerminalEmulator() {
       convertEol: true,
       cursorBlink: true,
       fontFamily: "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      fontSize: 13,
+      fontSize: 12,
       theme:
         effectiveTheme === "dark"
           ? { background: "#0B1020", foreground: "#F8FAFC", cursor: "#22D3EE" }
@@ -79,6 +83,10 @@ export function TerminalEmulator() {
       if (dims) {
         hub.send("terminal", JSON.stringify({ type: "resize", cols: dims.cols, rows: dims.rows }));
       }
+      if (workingDirectory?.trim()) {
+        const normalized = workingDirectory.replace(/"/g, '\\"');
+        hub.send("terminal", `Set-Location \"${normalized}\"\r`);
+      }
     }, 250);
 
     const unsub = hub.subscribe<string>("terminal", (msg) => {
@@ -91,7 +99,7 @@ export function TerminalEmulator() {
       window.clearTimeout(t);
       unsub();
     };
-  }, [hub, token]);
+  }, [hub, token, workingDirectory]);
 
   const status = getStatus("terminal");
 

@@ -1,9 +1,9 @@
+import React from "react";
 import {
   faFilePdf,
   faFileExcel,
   faFileImage,
   faFileArchive,
-  faFileAlt,
   faFileVideo,
   faFileAudio,
   faFileWord,
@@ -12,9 +12,9 @@ import {
   faGear,
   faKey,
 } from "@fortawesome/free-solid-svg-icons";
-import * as simpleIcons from "simple-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import React from "react";
+
+import { resolveIcon } from "@/lib/icons";
 
 export interface IconConfig {
   icon: React.ReactNode;
@@ -95,38 +95,15 @@ const EXTENSION_MAP: Record<string, { fa?: any; simple?: string; color: string }
 export function getFileIcon(filename: string): IconConfig {
   const ext = filename.split(".").pop()?.toLowerCase() ?? "";
   const config = EXTENSION_MAP[ext];
-
-  if (config) {
-    if (config.simple) {
-      const iconData = (simpleIcons as any)[config.simple];
-      if (iconData) {
-        return {
-          icon: (
-            <svg
-              role="img"
-              viewBox="0 0 24 24"
-              className="size-4 shrink-0"
-              fill="currentColor"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d={iconData.path} />
-            </svg>
-          ),
-          color: config.color || `#${iconData.hex}`,
-        };
-      }
-    }
-    if (config.fa) {
-      return {
-        icon: <FontAwesomeIcon icon={config.fa} className="size-4 shrink-0" />,
-        color: config.color,
-      };
-    }
+  if (config?.fa) {
+    return {
+      icon: <FontAwesomeIcon icon={config.fa} className="size-4 shrink-0" />,
+      color: config.color,
+    };
   }
-
-  // Default icon
+  const resolved = resolveIcon(filename);
   return {
-    icon: <FontAwesomeIcon icon={faFileAlt} className="size-4 shrink-0" />,
-    color: "#6b7280", // text-muted-foreground
+    icon: resolved.icon,
+    color: resolved.color,
   };
 }

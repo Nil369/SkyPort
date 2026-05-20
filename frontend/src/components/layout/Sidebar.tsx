@@ -23,6 +23,7 @@ import {
   EllipsisVertical,
   Layers3,
   Sparkles,
+  GitBranch,
 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -42,6 +43,7 @@ type NavItem = { to: string; label: string; icon: React.ComponentType<{ classNam
 
 const items: NavItem[] = [
   { to: "/overview", label: "Overview", icon: LayoutDashboard },
+  { to: "/github", label: "GitHub", icon: GitBranch },
   { to: "/projects", label: "Projects", icon: Boxes },
   { to: "/deployments", label: "Deployments", icon: Rocket },
   { to: "/files", label: "Files", icon: FolderTree, need: PERMS.filesystemRead },

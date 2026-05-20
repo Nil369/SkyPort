@@ -28,6 +28,9 @@ func All() []any {
 		&AgentRecord{},
 		&AgentToken{},
 		&MarketplaceInstall{},
+		&GitHubConnection{},
+		&GitHubInstallation{},
+		&GitHubRepository{},
 		&Project{},
 		&Deployment{},
 		&Runtime{},
@@ -155,4 +158,69 @@ type DomainMapping struct {
 	EnableSSL bool   `gorm:"not null;default:false" json:"enable_ssl"`
 	Email     string `gorm:"size:255" json:"email,omitempty"`
 	ProjectID *uint  `gorm:"index" json:"project_id"`
+}
+
+// GitHubConnection stores a SkyPort user's GitHub integration preferences and fallback credentials.
+type GitHubConnection struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	UserID          uint   `gorm:"index;not null" json:"user_id"`
+	Provider        string `gorm:"size:32;index;not null" json:"provider"`
+	AuthType        string `gorm:"size:16;index;not null" json:"auth_type"`
+	InstallationID  int64  `gorm:"index" json:"installation_id"`
+	AccountLogin    string `gorm:"size:255;index" json:"account_login,omitempty"`
+	AccountType     string `gorm:"size:32" json:"account_type,omitempty"`
+	AccessToken     string `gorm:"size:4096" json:"access_token,omitempty"`
+	SSHPrivateKey   string `gorm:"size:8192" json:"ssh_private_key,omitempty"`
+	RepositoryScope string `gorm:"size:1024" json:"repository_scope,omitempty"`
+	Connected       bool   `gorm:"not null;default:false;index" json:"connected"`
+}
+
+// GitHubInstallation caches installation metadata so the repo list can be refreshed cheaply.
+type GitHubInstallation struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	UserID         uint       `gorm:"index;not null" json:"user_id"`
+	InstallationID int64      `gorm:"uniqueIndex;not null" json:"installation_id"`
+	AccountLogin   string     `gorm:"size:255;index" json:"account_login,omitempty"`
+	AccountType    string     `gorm:"size:32" json:"account_type,omitempty"`
+	AccessToken    string     `gorm:"size:4096" json:"access_token,omitempty"`
+	TokenExpiresAt *time.Time `json:"token_expires_at,omitempty"`
+	LastSyncedAt   *time.Time `json:"last_synced_at,omitempty"`
+	Status         string     `gorm:"size:32;index;not null;default:inactive" json:"status"`
+}
+
+// GitHubRepository caches repository metadata and the branch selected for import.
+type GitHubRepository struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	InstallationID uint       `gorm:"index;not null" json:"installation_id"`
+	RepositoryID   int64      `gorm:"index" json:"repository_id"`
+	FullName       string     `gorm:"size:255;index;not null" json:"full_name"`
+	Name           string     `gorm:"size:255;index;not null" json:"name"`
+	Owner          string     `gorm:"size:255;index;not null" json:"owner"`
+	OwnerType      string     `gorm:"size:32" json:"owner_type,omitempty"`
+	Private        bool       `gorm:"not null;default:false;index" json:"private"`
+	Fork           bool       `gorm:"not null;default:false" json:"fork"`
+	DefaultBranch  string     `gorm:"size:255;index" json:"default_branch"`
+	SelectedBranch string     `gorm:"size:255;index" json:"selected_branch,omitempty"`
+	CloneURL       string     `gorm:"size:1024" json:"clone_url,omitempty"`
+	SSHURL         string     `gorm:"size:1024" json:"ssh_url,omitempty"`
+	HomepageURL    string     `gorm:"size:1024" json:"homepage_url,omitempty"`
+	Description    string     `gorm:"size:1024" json:"description,omitempty"`
+	Language       string     `gorm:"size:120" json:"language,omitempty"`
+	Runtime        string     `gorm:"size:64;index" json:"runtime,omitempty"`
+	Framework      string     `gorm:"size:120;index" json:"framework,omitempty"`
+	DeploymentMode string     `gorm:"size:32;index" json:"deployment_mode,omitempty"`
+	Selected       bool       `gorm:"not null;default:false;index" json:"selected"`
+	LastSyncedAt   *time.Time `json:"last_synced_at,omitempty"`
 }
