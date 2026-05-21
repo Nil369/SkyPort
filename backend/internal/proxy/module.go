@@ -37,6 +37,7 @@ func (m *Module) Register(a *app.App) error {
 	pr.Put("/mappings/:id", updateMappingHandler(a, m.caddyService))
 	pr.Delete("/mappings/:id", deleteMappingHandler(a, m.caddyService))
 	pr.Get("/caddy/status", caddyStatusHandler(m.caddyService))
+	pr.Get("/caddy/config", caddyConfigHandler(m.caddyService))
 	pr.Post("/caddy/install", caddyInstallHandler())
 	pr.Post("/caddy/reload", caddyReloadHandler(m.caddyService))
 	pr.Get("/dns/guide", dnsGuideHandler())
@@ -157,12 +158,13 @@ func generateHandler(a *app.App, caddyService *caddy.Service) fiber.Handler {
 }
 
 type mappingRequest struct {
-	Domain    string `json:"domain" validate:"required,max=255"`
-	Port      int    `json:"port" validate:"required,min=1,max=65535"`
-	Type      string `json:"type" validate:"omitempty,oneof=caddy nginx"`
-	EnableSSL bool   `json:"enable_ssl"`
-	Email     string `json:"email" validate:"omitempty,max=255"`
-	ProjectID *uint  `json:"project_id"`
+	Domain      string `json:"domain" validate:"required,max=255"`
+	Port        int    `json:"port" validate:"required,min=1,max=65535"`
+	Type        string `json:"type" validate:"omitempty,oneof=caddy nginx"`
+	EnableSSL   bool   `json:"enable_ssl"`
+	Email       string `json:"email" validate:"omitempty,max=255"`
+	ProjectID   *uint  `json:"project_id"`
+	Middlewares string `json:"middlewares"`
 }
 
 // @Summary List proxy mappings
@@ -199,13 +201,21 @@ func createMappingHandler(a *app.App, caddyService *caddy.Service) fiber.Handler
 		if t == "" {
 			t = "caddy"
 		}
+
+		// Validation check: check if port is already used for reverse proxy or redirection
+		var existing models.DomainMapping
+		if err := a.DB.Where("port = ?", req.Port).First(&existing).Error; err == nil {
+			return response.Error(c, fiber.StatusBadRequest, "port_already_in_use", fmt.Sprintf("Port %d is already in use by domain %s", req.Port, existing.Domain))
+		}
+
 		item := models.DomainMapping{
-			Domain:    caddy.NormalizeDomain(req.Domain),
-			Port:      req.Port,
-			Type:      t,
-			EnableSSL: req.EnableSSL,
-			Email:     req.Email,
-			ProjectID: req.ProjectID,
+			Domain:      caddy.NormalizeDomain(req.Domain),
+			Port:        req.Port,
+			Type:        t,
+			EnableSSL:   req.EnableSSL,
+			Email:       req.Email,
+			ProjectID:   req.ProjectID,
+			Middlewares: req.Middlewares,
 		}
 		if err := a.DB.Create(&item).Error; err != nil {
 			return response.Error(c, fiber.StatusInternalServerError, "create_mapping_failed", err.Error())
@@ -243,14 +253,22 @@ func updateMappingHandler(a *app.App, caddyService *caddy.Service) fiber.Handler
 		if t == "" {
 			t = "caddy"
 		}
+
+		// Validation check: check if port is already used by another mapping
+		var existing models.DomainMapping
+		if err := a.DB.Where("port = ? AND id != ?", req.Port, id).First(&existing).Error; err == nil {
+			return response.Error(c, fiber.StatusBadRequest, "port_already_in_use", fmt.Sprintf("Port %d is already in use by domain %s", req.Port, existing.Domain))
+		}
+
 		updates := map[string]any{
-			"domain":     caddy.NormalizeDomain(req.Domain),
-			"port":       req.Port,
-			"type":       t,
-			"enable_ssl": req.EnableSSL,
-			"email":      req.Email,
-			"project_id": req.ProjectID,
-			"updated_at": time.Now(),
+			"domain":      caddy.NormalizeDomain(req.Domain),
+			"port":        req.Port,
+			"type":        t,
+			"enable_ssl":  req.EnableSSL,
+			"email":       req.Email,
+			"project_id":  req.ProjectID,
+			"middlewares": req.Middlewares,
+			"updated_at":  time.Now(),
 		}
 		if err := a.DB.Model(&models.DomainMapping{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 			return err
@@ -719,6 +737,24 @@ func certbotHandler() fiber.Handler {
 			"effective_execute": effectiveExecute,
 			"command":           cmd,
 			"output":            output,
+		})
+	}
+}
+
+// @Summary Get global Caddy config
+// @Tags Proxy
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Router /api/v1/proxy/caddy/config [get]
+func caddyConfigHandler(caddyService *caddy.Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		content, err := caddyService.ReadCaddyfile()
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "read_caddyfile_failed", err.Error())
+		}
+		return response.OK(c, fiber.Map{
+			"config": content,
 		})
 	}
 }

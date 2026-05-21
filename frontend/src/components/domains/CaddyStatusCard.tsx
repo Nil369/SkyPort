@@ -196,7 +196,7 @@ export function CaddyStatusCard({
               size="sm"
               variant="outline"
               onClick={handleReload}
-              disabled={reloading || !running}
+              disabled={reloading}
               className="flex-1"
             >
               <RotateCw className={`mr-2 h-4 w-4 ${reloading ? "animate-spin" : ""}`} />

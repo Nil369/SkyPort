@@ -41,6 +41,7 @@ interface DomainMapping {
   project_id?: number;
   created_at: string;
   updated_at: string;
+  middlewares?: string;
 }
 
 export function DomainsPage() {
@@ -89,6 +90,7 @@ export function DomainsPage() {
       email: string;
       projectId: string;
       enableSSL: boolean;
+      middlewares: string;
     }) => {
       const payload = {
         domain: data.domain,
@@ -99,6 +101,7 @@ export function DomainsPage() {
         project_id: data.projectId
           ? Number(data.projectId)
           : null,
+        middlewares: data.middlewares || "[]",
       };
 
       if (editingMapping) {
@@ -300,6 +303,8 @@ export function DomainsPage() {
 
             <DomainForm
               projects={projects.data || []}
+              mappings={mappings.data || []}
+              editingMappingId={editingMapping?.id}
               isEditing={!!editingMapping}
               initialData={
                 editingMapping
@@ -316,6 +321,8 @@ export function DomainsPage() {
                         : "",
                     enableSSL:
                       editingMapping.enable_ssl,
+                    middlewares:
+                      editingMapping.middlewares || "[]",
                   }
                   : undefined
               }

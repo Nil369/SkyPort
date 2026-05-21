@@ -84,7 +84,9 @@ func (s *Service) GetStatus(ctx context.Context) (*CaddyStatus, error) {
 func isCaddyRunning(ctx context.Context) bool {
 	binary := "caddy"
 	if runtime.GOOS == "windows" {
-		if p, err := findWindowsCaddy(); err == nil {
+		if path, err := exec.LookPath("caddy"); err == nil {
+			binary = path
+		} else if p, err := findWindowsCaddy(); err == nil {
 			binary = p
 		}
 	}
@@ -161,7 +163,7 @@ func (s *Service) SyncCaddyfile(ctx context.Context) error {
 	return nil
 }
 
-// ValidateAndReloadCaddy validates the current Caddyfile and reloads Caddy
+// ValidateAndReloadCaddy validates the current Caddyfile and reloads Caddy (or starts it if not running)
 func (s *Service) ValidateAndReloadCaddy(ctx context.Context) error {
 	// Backup current config
 	backupPath, err := BackupCaddyfile(s.CaddyfilePath)
@@ -178,13 +180,23 @@ func (s *Service) ValidateAndReloadCaddy(ctx context.Context) error {
 		return err
 	}
 
-	// Reload Caddy
-	if err := ReloadCaddy(ctx, s.CaddyfilePath); err != nil {
-		// Restore backup if reload fails
-		if backupPath != "" {
-			_ = RestoreCaddyfileFromBackup(backupPath, s.CaddyfilePath)
+	// Reload or Start Caddy depending on active running state
+	if isCaddyRunning(ctx) {
+		if err := ReloadCaddy(ctx, s.CaddyfilePath); err != nil {
+			// Restore backup if reload fails
+			if backupPath != "" {
+				_ = RestoreCaddyfileFromBackup(backupPath, s.CaddyfilePath)
+			}
+			return err
 		}
-		return err
+	} else {
+		if err := StartCaddy(ctx, s.CaddyfilePath); err != nil {
+			// Restore backup if start fails
+			if backupPath != "" {
+				_ = RestoreCaddyfileFromBackup(backupPath, s.CaddyfilePath)
+			}
+			return err
+		}
 	}
 
 	return nil

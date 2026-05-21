@@ -9,6 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  FileCode,
+  Copy,
+  Check,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { Badge } from "@/components/ui/badge";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 import {
   Card,
@@ -43,6 +54,7 @@ export interface DomainMapping {
   project_id?: number;
   created_at: string;
   updated_at: string;
+  middlewares?: string;
 }
 
 interface Project {
@@ -74,6 +86,9 @@ export function DomainList({
   const [page, setPage] = React.useState(1);
 
   const [search, setSearch] = React.useState("");
+
+  const [viewingMapping, setViewingMapping] = React.useState<DomainMapping | null>(null);
+  const [copied, setCopied] = React.useState(false);
 
   const filteredMappings = React.useMemo(() => {
     return mappings.filter((mapping) => {
@@ -183,11 +198,7 @@ export function DomainList({
                   <TableHeader>
                     <TableRow>
                       <TableHead>
-                        Domain
-                      </TableHead>
-
-                      <TableHead>
-                        Target
+                        Route
                       </TableHead>
 
                       <TableHead>
@@ -240,44 +251,42 @@ export function DomainList({
                             key={`${mapping.id}-${mapping.domain}-${mapping.port}`}
                           >
                             <TableCell>
-                              <div className="flex flex-col">
-                                <span className="font-medium">
-                                  {mapping.domain}
-                                </span>
-
-                                {mapping.email && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {
-                                      mapping.email
-                                    }
-                                  </span>
-                                )}
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <code className=" rounded-md border border-blue-500/20 bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-violet-500/10 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-100 shadow-sm backdrop-blur-md">
+                                  {mapping.enable_ssl ? "https" : "http"}://{mapping.domain}
+                                </code>
+                                <span className="text-muted-foreground font-bold text-base select-none">→</span>
+                                <code className="rounded bg-muted/60 border border-border/40 px-2.5 py-1 text-xs">
+                                  http://localhost:{mapping.port}
+                                </code>
                               </div>
-                            </TableCell>
-
-                            <TableCell>
-                              <code className="rounded bg-muted px-2 py-1 text-xs">
-                                localhost:
-                                {
-                                  mapping.port
-                                }
-                              </code>
+                              {mapping.email && (
+                                <span className="text-xs text-muted-foreground mt-0.5 block">
+                                  {mapping.email}
+                                </span>
+                              )}
                             </TableCell>
 
                             <TableCell>
                               {mapping.enable_ssl ? (
-                                <Badge>
+                                <Badge variant="success">
                                   HTTPS
                                 </Badge>
                               ) : (
-                                <Badge variant="success">
+                                <Badge>
                                   HTTP
                                 </Badge>
                               )}
                             </TableCell>
 
                             <TableCell>
-                              {projectName}
+                              {projectName !== "—" ? (
+                                <Badge variant="info">
+                                  {projectName}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
                             </TableCell>
 
                             <TableCell>
@@ -285,24 +294,31 @@ export function DomainList({
                             </TableCell>
 
                             <TableCell>
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-1">
+                                {/* View Config */}
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  title="View config"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setViewingMapping(mapping);
+                                  }}
+                                >
+                                  <FileCode className="h-4 w-4" />
+                                </Button>
+
                                 {/* Open */}
                                 <Button
                                   type="button"
                                   size="icon"
                                   variant="ghost"
-                                  onClick={(
-                                    e
-                                  ) => {
+                                  onClick={(e) => {
                                     e.preventDefault();
-
                                     e.stopPropagation();
-
-                                    window.open(
-                                      domainUrl,
-                                      "_blank",
-                                      "noopener,noreferrer"
-                                    );
+                                    window.open(domainUrl, "_blank", "noopener,noreferrer");
                                   }}
                                 >
                                   <ExternalLink className="h-4 w-4" />
@@ -431,6 +447,54 @@ export function DomainList({
             </>
           )}
       </CardContent>
+
+      {/* View Config Dialog */}
+      <Dialog open={!!viewingMapping} onOpenChange={(open) => { if (!open) { setViewingMapping(null); setCopied(false); } }}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileCode className="h-5 w-5" />
+              Caddy Config
+            </DialogTitle>
+            <DialogDescription>
+              Generated Caddyfile snippet for <code className="font-semibold">{viewingMapping?.domain}</code>
+            </DialogDescription>
+          </DialogHeader>
+          {viewingMapping && (() => {
+            const lines: string[] = [];
+            lines.push(`${viewingMapping.domain} {`);
+            if (viewingMapping.enable_ssl && viewingMapping.email) {
+              lines.push(`  tls ${viewingMapping.email}`);
+            }
+            // middlewares
+            try {
+              const mws: string[] = viewingMapping.middlewares ? JSON.parse(viewingMapping.middlewares) : [];
+              mws.filter(Boolean).forEach((mw) => lines.push(`  ${mw}`));
+            } catch {}
+            lines.push(`  reverse_proxy localhost:${viewingMapping.port}`);
+            lines.push(`}`);
+            const snippet = lines.join("\n");
+            return (
+              <div className="relative">
+                <pre className="rounded-lg bg-muted/70 border p-4 text-xs font-mono overflow-x-auto whitespace-pre">{snippet}</pre>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="absolute top-2 right-2"
+                  onClick={() => {
+                    navigator.clipboard.writeText(snippet);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }}
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 mr-1" /> : <Copy className="h-3.5 w-3.5 mr-1" />}
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
