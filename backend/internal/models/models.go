@@ -147,17 +147,18 @@ type EnvironmentVariable struct {
 
 // DomainMapping stores reverse proxy mappings (domain -> local port).
 type DomainMapping struct {
-	ID        uint `gorm:"primaryKey"`
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index" swaggertype:"string"`
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-" swaggertype:"string"`
 
 	Domain    string `gorm:"size:255;index;not null" json:"domain"`
 	Port      int    `gorm:"not null" json:"port"`
 	Type      string `gorm:"size:16;not null" json:"type"` // caddy | nginx
 	EnableSSL bool   `gorm:"not null;default:false" json:"enable_ssl"`
-	Email     string `gorm:"size:255" json:"email,omitempty"`
-	ProjectID *uint  `gorm:"index" json:"project_id"`
+	Email       string         `gorm:"size:255" json:"email,omitempty"`
+	ProjectID   *uint          `gorm:"index" json:"project_id"`
+	Middlewares string         `gorm:"type:text" json:"middlewares"`
 }
 
 // GitHubConnection stores a SkyPort user's GitHub integration preferences and fallback credentials.

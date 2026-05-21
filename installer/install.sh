@@ -42,6 +42,12 @@ ENV_FILE="${CONFIG_DIR}/skyport.env"
 SERVICE_FILE="/etc/systemd/system/skyport.service"
 LAUNCHD_FILE="/Library/LaunchDaemons/in.skyport.server.plist"
 
+APP_ID="3771772"
+APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEArxCKrQlB4dcgiLfC0kK+TcxzqBJqz3VYNf2L17eXB0Pr3JM3c/tW7Qu0...........
+-----END RSA PRIVATE KEY-----
+"
+
 # =========================================================
 # HELPERS
 # =========================================================
@@ -105,7 +111,7 @@ cli_url() {
 }
 
 # =========================================================
-# USER
+# USER (LINUX ONLY)
 # =========================================================
 
 create_user() {
@@ -154,14 +160,14 @@ create_directories() {
 }
 
 # =========================================================
-# ENV
+# ENVIRONMENT SETUP
 # =========================================================
 
 generate_secret() {
   tr -dc A-Za-z0-9 </dev/urandom | head -c 64
 }
 
-write_env() {
+write_env_file() {
 
   log "Generating environment file..."
 
@@ -187,8 +193,9 @@ ENABLE_PROJECTS=true
 ENABLE_METRICS=true
 ENABLE_FILESYSTEM=true
 
-APP_ID=3771772
-APP_PRIVATE_KEY=""
+APP_ID=${APP_ID}
+
+APP_PRIVATE_KEY=${APP_PRIVATE_KEY}
 
 ALLOWED_ORIGINS=*
 TRUSTED_PROXIES=127.0.0.1,::1
@@ -476,7 +483,7 @@ main() {
   install_server "${version}" "${os}" "${arch}"
   install_cli "${version}" "${os}" "${arch}"
 
-  write_env
+  write_env_file
 
   if [ "${os}" = "linux" ] && command -v systemctl >/dev/null 2>&1; then
     install_systemd_service

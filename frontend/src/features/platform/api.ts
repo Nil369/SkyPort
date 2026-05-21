@@ -270,6 +270,7 @@ export type DomainMapping = {
   email?: string;
   project_id?: number | null;
   created_at?: string;
+  middlewares?: string;
 };
 
 export type UpdateCheckResult = {
@@ -454,14 +455,17 @@ export const platformApi = {
     (await http.post("/proxy/generate", { ...input, execute: false, reload: false })).data,
 
   listDomainMappings: async () => (await http.get<{ mappings: DomainMapping[] }>("/proxy/mappings")).data,
-  createDomainMapping: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null }) =>
+  createDomainMapping: async (input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null; middlewares?: string }) =>
     (await http.post<DomainMapping>("/proxy/mappings", input)).data,
-  updateDomainMapping: async (id: number, input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null }) =>
+  updateDomainMapping: async (id: number, input: { domain: string; port: number; type: "caddy" | "nginx"; enable_ssl: boolean; email?: string; project_id?: number | null; middlewares?: string }) =>
     (await http.put<DomainMapping>(`/proxy/mappings/${id}`, input)).data,
   deleteDomainMapping: async (id: number) => (await http.delete(`/proxy/mappings/${id}`)).data,
   caddyStatus: async () => (await http.get<{ installed: boolean; path?: string; version?: string }>("/proxy/caddy/status")).data,
+  caddyGetConfig: async () => (await http.get<{ config: string }>("/proxy/caddy/config")).data,
   caddyInstall: async (execute: boolean) => (await http.post("/proxy/caddy/install", { execute })).data,
 
+  caddyReload: async () => (await http.post("/proxy/caddy/reload", {})).data,
+  getDNSGuide: async () => (await http.get("/proxy/dns/guide")).data,
   checkUpdates: async () => (await http.get<UpdateCheckResult>("/updates/check")).data,
 
   githubBridgeInfo: async () => (await http.get<GitHubBridgeInfo>("/github/bridge")).data,

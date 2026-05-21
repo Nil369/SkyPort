@@ -62,9 +62,25 @@ type Config struct {
 
 // Load reads .env when present (local dev), then environment variables.
 // Required for twelve-factor style deploys; .env is optional convenience.
+// Searches for .env in: current directory, installation directory (Windows), and /etc/skyport (Linux/macOS).
 func Load() (*Config, error) {
-	// Best-effort: ignore missing .env in production.
-	_ = godotenv.Load()
+	// Search for .env in common install locations
+	envPaths := []string{
+		".env",                             // Current directory (local dev)
+		"C:\\Program Files\\SkyPort\\.env", // Windows install dir
+		"/opt/skyport/.env",                // Linux install dir
+		"/usr/local/skyport/.env",          // Linux alternate
+		"/usr/local/opt/skyport/.env",      // macOS install dir
+		"${HOME}/SkyPort/.env",             // User home (macOS/Linux)
+	}
+
+	// Try to load .env from all known paths (ignore errors)
+	for _, path := range envPaths {
+		if err := godotenv.Load(path); err == nil {
+			break // Successfully loaded from this path
+		}
+		// Continue to next path on error
+	}
 
 	port, err := strconv.Atoi(getEnv("SKYPORT_PORT", "8080"))
 	if err != nil {
@@ -102,11 +118,11 @@ func Load() (*Config, error) {
 		OpenRegistration:    getBoolEnv("SKYPORT_OPEN_REGISTRATION", true),
 		EncryptionKey:       getEnv("SKYPORT_ENCRYPTION_KEY", "uE8+7Fq3H+vW9O8X/pY5ZQ=="), // Default for dev, should be changed in prod
 		GitHubWebhookSecret: getEnv("GITHUB_WEBHOOK_SECRET", ""),
-		GitHubAppID:         getEnv("APP_ID", "3771772"),
+		GitHubAppID:         getEnv("GITHUB_APP_ID", getEnv("APP_ID", "")),
 		GitHubAppName:       getEnv("GITHUB_APP_NAME", "SkyPort"),
 		GitHubAppSlug:       getEnv("GITHUB_APP_SLUG", "skyportdeploy"),
-		GitHubPrivateKey:    getEnv("APP_PRIVATE_KEY", ""),
-		GitHubAppPrivateKey: getEnv("APP_PRIVATE_KEY", ""),
+		GitHubPrivateKey:    getEnv("GITHUB_PRIVATE_KEY", getEnv("APP_PRIVATE_KEY", "")),
+		GitHubAppPrivateKey: getEnv("GITHUB_APP_PRIVATE_KEY", getEnv("APP_PRIVATE_KEY", "")),
 		GitHubAPIBaseURL:    getEnv("GITHUB_API_BASE_URL", "https://api.github.com"),
 		GitHubWebBaseURL:    getEnv("GITHUB_WEB_BASE_URL", "https://github.com"),
 		GitHubBridgeURL:     getEnv("GITHUB_BRIDGE_URL", "https://skyport.akashhalder.in"),

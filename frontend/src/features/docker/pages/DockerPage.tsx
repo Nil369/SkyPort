@@ -244,8 +244,8 @@ export function DockerPage() {
                 <TableHead>Image</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Ports</TableHead>
-                <TableHead className="max-w-[140px]">Mounts</TableHead>
-                <TableHead className="max-w-[120px]">Networks</TableHead>
+                <TableHead className="max-w-35">Mounts</TableHead>
+                <TableHead className="max-w-30">Networks</TableHead>
                 <TableHead>URL</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -264,10 +264,10 @@ export function DockerPage() {
                     <TableCell>{c.image || "-"}</TableCell>
                     <TableCell>{statusText}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.ports || "-"}</TableCell>
-                    <TableCell className="max-w-[140px] truncate text-xs text-muted-foreground" title={c.mounts || ""}>
+                    <TableCell className="max-w-35 truncate text-xs text-muted-foreground" title={c.mounts || ""}>
                       {c.mounts || "—"}
                     </TableCell>
-                    <TableCell className="max-w-[120px] truncate text-xs text-muted-foreground" title={c.networks || ""}>
+                    <TableCell className="max-w-30 truncate text-xs text-muted-foreground" title={c.networks || ""}>
                       {c.networks || "—"}
                     </TableCell>
                     <TableCell className="text-xs">
@@ -513,7 +513,7 @@ export function DockerPage() {
                     <TableCell className="font-mono text-xs">{n.name}</TableCell>
                     <TableCell>{n.driver}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{n.scope || "—"}</TableCell>
-                    <TableCell className="max-w-[180px] truncate font-mono text-[10px] text-muted-foreground">{n.id}</TableCell>
+                    <TableCell className="max-w-45 truncate font-mono text-[10px] text-muted-foreground">{n.id}</TableCell>
                   </TableRow>
                 ))}
                 {!filteredNetworks.length ? (
