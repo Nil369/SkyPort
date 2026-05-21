@@ -14,26 +14,32 @@ import (
 
 	"skyport/internal/app"
 	"skyport/internal/auth"
+	"skyport/internal/caddy"
 	"skyport/internal/models"
 	"skyport/internal/response"
 	"skyport/internal/security"
 	"skyport/internal/validator"
 )
 
-type Module struct{}
+type Module struct {
+	caddyService *caddy.Service
+}
 
 func (m *Module) Name() string { return "proxy" }
 
 func (m *Module) Register(a *app.App) error {
 	pr := a.Fiber.Group("/api/v1/proxy")
 	pr.Use(auth.RequireJWT(a.Config.JWTSecret))
-	pr.Post("/generate", generateHandler(a))
+	m.caddyService = caddy.NewService(a.DB, a.Config.WorkspaceRoot)
+	pr.Post("/generate", generateHandler(a, m.caddyService))
 	pr.Get("/mappings", listMappingsHandler(a))
-	pr.Post("/mappings", createMappingHandler(a))
-	pr.Put("/mappings/:id", updateMappingHandler(a))
-	pr.Delete("/mappings/:id", deleteMappingHandler(a))
-	pr.Get("/caddy/status", caddyStatusHandler())
+	pr.Post("/mappings", createMappingHandler(a, m.caddyService))
+	pr.Put("/mappings/:id", updateMappingHandler(a, m.caddyService))
+	pr.Delete("/mappings/:id", deleteMappingHandler(a, m.caddyService))
+	pr.Get("/caddy/status", caddyStatusHandler(m.caddyService))
 	pr.Post("/caddy/install", caddyInstallHandler())
+	pr.Post("/caddy/reload", caddyReloadHandler(m.caddyService))
+	pr.Get("/dns/guide", dnsGuideHandler())
 	pr.Post("/certbot", certbotHandler())
 	return nil
 }
@@ -60,7 +66,7 @@ type generateRequest struct {
 // @Success 200 {object} map[string]any
 // @Failure 401 {object} response.ErrorBody
 // @Router /api/v1/proxy/generate [post]
-func generateHandler(a *app.App) fiber.Handler {
+func generateHandler(a *app.App, caddyService *caddy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req generateRequest
 		if err := validator.ParseAndValidate(c, &req); err != nil {
@@ -183,7 +189,7 @@ func listMappingsHandler(a *app.App) fiber.Handler {
 // @Param request body mappingRequest true "Mapping payload"
 // @Success 201 {object} models.DomainMapping
 // @Router /api/v1/proxy/mappings [post]
-func createMappingHandler(a *app.App) fiber.Handler {
+func createMappingHandler(a *app.App, caddyService *caddy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var req mappingRequest
 		if err := validator.ParseAndValidate(c, &req); err != nil {
@@ -194,7 +200,7 @@ func createMappingHandler(a *app.App) fiber.Handler {
 			t = "caddy"
 		}
 		item := models.DomainMapping{
-			Domain:    req.Domain,
+			Domain:    caddy.NormalizeDomain(req.Domain),
 			Port:      req.Port,
 			Type:      t,
 			EnableSSL: req.EnableSSL,
@@ -202,7 +208,14 @@ func createMappingHandler(a *app.App) fiber.Handler {
 			ProjectID: req.ProjectID,
 		}
 		if err := a.DB.Create(&item).Error; err != nil {
-			return err
+			return response.Error(c, fiber.StatusInternalServerError, "create_mapping_failed", err.Error())
+		}
+
+		// Sync Caddyfile if using Caddy
+		if t == "caddy" {
+			ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
+			defer cancel()
+			_ = caddyService.SyncCaddyfile(ctx)
 		}
 		return response.JSON(c, fiber.StatusCreated, item)
 	}
@@ -216,7 +229,7 @@ func createMappingHandler(a *app.App) fiber.Handler {
 // @Param request body mappingRequest true "Mapping payload"
 // @Success 200 {object} models.DomainMapping
 // @Router /api/v1/proxy/mappings/{id} [put]
-func updateMappingHandler(a *app.App) fiber.Handler {
+func updateMappingHandler(a *app.App, caddyService *caddy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
 		if err != nil || id <= 0 {
@@ -231,7 +244,7 @@ func updateMappingHandler(a *app.App) fiber.Handler {
 			t = "caddy"
 		}
 		updates := map[string]any{
-			"domain":     req.Domain,
+			"domain":     caddy.NormalizeDomain(req.Domain),
 			"port":       req.Port,
 			"type":       t,
 			"enable_ssl": req.EnableSSL,
@@ -246,6 +259,14 @@ func updateMappingHandler(a *app.App) fiber.Handler {
 		if err := a.DB.First(&item, id).Error; err != nil {
 			return err
 		}
+
+		// Sync Caddyfile if using Caddy
+		if t == "caddy" {
+			ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
+			defer cancel()
+			_ = caddyService.SyncCaddyfile(ctx)
+		}
+
 		return response.OK(c, item)
 	}
 }
@@ -256,16 +277,48 @@ func updateMappingHandler(a *app.App) fiber.Handler {
 // @Produce json
 // @Success 200 {object} map[string]any
 // @Router /api/v1/proxy/mappings/{id} [delete]
-func deleteMappingHandler(a *app.App) fiber.Handler {
+func deleteMappingHandler(a *app.App, caddyService *caddy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
 		if err != nil || id <= 0 {
 			return response.BadRequest(c, "invalid mapping id")
 		}
-		if err := a.DB.Delete(&models.DomainMapping{}, id).Error; err != nil {
-			return err
+
+		// Get the mapping before deleting
+		var mapping models.DomainMapping
+
+		if err := a.DB.First(&mapping, id).Error; err != nil {
+			return response.Error(
+				c,
+				fiber.StatusNotFound,
+				"mapping_not_found",
+				"Domain mapping not found",
+			)
 		}
-		return response.OK(c, fiber.Map{"deleted": true})
+
+		// Delete mapping
+		if err := a.DB.Delete(&models.DomainMapping{}, id).Error; err != nil {
+			return response.Error(
+				c,
+				fiber.StatusInternalServerError,
+				"delete_mapping_failed",
+				err.Error(),
+			)
+		}
+
+		// Sync Caddyfile if needed
+		if mapping.Type == "caddy" {
+			ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
+			defer cancel()
+
+			if err := caddyService.SyncCaddyfile(ctx); err != nil {
+				a.Logger.Printf("WARNING: Failed to sync Caddyfile after delete: %v", err)
+			}
+		}
+
+		return response.OK(c, fiber.Map{
+			"deleted": true,
+		})
 	}
 }
 
@@ -275,26 +328,21 @@ func deleteMappingHandler(a *app.App) fiber.Handler {
 // @Produce json
 // @Success 200 {object} map[string]any
 // @Router /api/v1/proxy/caddy/status [get]
-func caddyStatusHandler() fiber.Handler {
+func caddyStatusHandler(caddyService *caddy.Service) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		path, err := exec.LookPath("caddy")
-		if err != nil && runtime.GOOS == "windows" {
-			if p := windowsCaddyLocalBin(); p != "" {
-				path = p
-				err = nil
-			}
-		}
-		if err != nil {
-			return response.OK(c, fiber.Map{"installed": false})
-		}
 		ctx, cancel := context.WithTimeout(c.UserContext(), 3*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, path, "version")
-		out, _ := cmd.Output()
+
+		status, err := caddyService.GetStatus(ctx)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "caddy_status_failed", err.Error())
+		}
+
 		return response.OK(c, fiber.Map{
-			"installed": true,
-			"path":      path,
-			"version":   strings.TrimSpace(string(out)),
+			"installed": status.Installed,
+			"running":   status.Running,
+			"path":      status.Path,
+			"version":   status.Version,
 		})
 	}
 }
@@ -416,6 +464,174 @@ func windowsCaddyFallback(primaryCmd, output string) (string, string) {
 	}
 	_ = primaryCmd
 	return "", ""
+}
+
+// @Summary Reload Caddy
+// @Tags Proxy
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Router /api/v1/proxy/caddy/reload [post]
+func caddyReloadHandler(caddyService *caddy.Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		ctx, cancel := context.WithTimeout(c.UserContext(), 15*time.Second)
+		defer cancel()
+
+		// Sync from database first
+		if err := caddyService.SyncCaddyfile(ctx); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "sync_failed", fmt.Sprintf("Failed to sync Caddyfile: %v", err))
+		}
+
+		// Then reload Caddy
+		if err := caddyService.ValidateAndReloadCaddy(ctx); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "reload_failed", fmt.Sprintf("Failed to reload Caddy: %v", err))
+		}
+
+		return response.OK(c, fiber.Map{
+			"reloaded": true,
+			"message":  "Caddy reloaded successfully",
+		})
+	}
+}
+
+// @Summary DNS Configuration Guide
+// @Tags Proxy
+// @Produce json
+// @Success 200 {object} map[string]any
+// @Router /api/v1/proxy/dns/guide [get]
+func dnsGuideHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		return response.OK(c, fiber.Map{
+			"dns_setup": map[string]interface{}{
+				"title":       "DNS Configuration Guide",
+				"description": "Configure your domain's DNS records to point to your server",
+				"record_types": map[string]interface{}{
+					"a_record": map[string]interface{}{
+						"name":        "A Record",
+						"description": "Direct IP address mapping (recommended for most domains)",
+						"example": map[string]interface{}{
+							"type":  "A",
+							"name":  "example.com",
+							"value": "YOUR_SERVER_IP",
+							"ttl":   3600,
+						},
+						"steps": []string{
+							"1. Go to your domain registrar's DNS settings",
+							"2. Add an A record",
+							"3. Set the value to your server's public IP",
+							"4. Wait for propagation (can take up to 48 hours)",
+						},
+					},
+					"cname_record": map[string]interface{}{
+						"name":        "CNAME Record",
+						"description": "Point subdomain to another domain (useful for subdomains)",
+						"example": map[string]interface{}{
+							"type":  "CNAME",
+							"name":  "api.example.com",
+							"value": "example.com",
+							"ttl":   3600,
+						},
+						"steps": []string{
+							"1. Go to your domain registrar's DNS settings",
+							"2. Add a CNAME record for your subdomain",
+							"3. Set the value to your main domain",
+							"4. Wait for propagation",
+						},
+					},
+					"www_redirect": map[string]interface{}{
+						"name":        "WWW Redirect",
+						"description": "Redirect www.example.com to example.com",
+						"steps": []string{
+							"1. Create CNAME record: www -> example.com",
+							"2. Both will now point to the same location",
+							"3. Caddy automatically handles HTTPS for both",
+						},
+					},
+				},
+				"examples": map[string]interface{}{
+					"example_1": map[string]interface{}{
+						"title":    "Setup api.github.com → api v2",
+						"scenario": "Redirect api.github.com to a different backend (api v2)",
+						"dns_setup": []map[string]interface{}{
+							{
+								"type":  "A Record",
+								"name":  "api.github.com",
+								"value": "YOUR_SERVER_IP",
+							},
+						},
+						"skyport_domain_mapping": map[string]interface{}{
+							"domain":      "api.github.com",
+							"target_port": 3001,
+							"ssl_enabled": true,
+							"email":       "admin@example.com",
+						},
+						"result": "https://api.github.com automatically routes to your backend on port 3001",
+					},
+					"example_2": map[string]interface{}{
+						"title":    "Setup localhost:3000 reverse proxy",
+						"scenario": "Expose local port 3000 via domain",
+						"dns_setup": []map[string]interface{}{
+							{
+								"type":  "A Record",
+								"name":  "myapp.example.com",
+								"value": "YOUR_SERVER_IP",
+							},
+						},
+						"skyport_domain_mapping": map[string]interface{}{
+							"domain":      "myapp.example.com",
+							"target_port": 3000,
+							"ssl_enabled": true,
+							"email":       "admin@example.com",
+						},
+						"result": "https://myapp.example.com → http://localhost:3000 (with HTTPS)",
+					},
+				},
+				"caddyfile_examples": map[string]interface{}{
+					"simple": map[string]interface{}{
+						"title":   "Simple HTTP to port mapping",
+						"content": "api.github.com {\n\treverse_proxy localhost:3001\n}",
+					},
+					"with_ssl": map[string]interface{}{
+						"title":   "HTTPS with auto-TLS",
+						"content": "https://api.github.com {\n\ttls admin@example.com\n\treverse_proxy localhost:3001\n}",
+					},
+					"http_redirect": map[string]interface{}{
+						"title":   "Redirect HTTP to HTTPS",
+						"content": "http://api.github.com {\n\tredir https://{host}{uri} permanent\n}\n\nhttps://api.github.com {\n\ttls admin@example.com\n\treverse_proxy localhost:3001\n}",
+					},
+				},
+				"troubleshooting": []map[string]interface{}{
+					{
+						"issue": "Domain resolves but connection refused",
+						"solutions": []string{
+							"Check Caddy is running: caddy list",
+							"Verify the target port is accessible: nc -zv localhost 3000",
+							"Check Caddy logs for errors",
+							"Ensure firewall allows port 80 and 443",
+						},
+					},
+					{
+						"issue": "HTTPS certificate not generating",
+						"solutions": []string{
+							"Verify DNS is pointing to your server",
+							"Check firewall allows outbound 443 for Let's Encrypt",
+							"Ensure domain is publicly accessible",
+							"Check Caddy logs for ACME errors",
+						},
+					},
+					{
+						"issue": "DNS not propagating",
+						"solutions": []string{
+							"Use nslookup or dig to check: nslookup example.com",
+							"Clear your DNS cache",
+							"Wait up to 48 hours for full propagation",
+							"Some registrars require confirming changes",
+						},
+					},
+				},
+			},
+		})
+	}
 }
 
 func windowsCaddyLocalBin() string {

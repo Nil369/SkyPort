@@ -1,249 +1,356 @@
 import * as React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+
 import toast from "react-hot-toast";
+
+import { Plus } from "lucide-react";
 
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+
 import { platformApi } from "@/features/platform/api";
 
+import { DomainForm } from "@/components/domains/DomainForm";
+import { DomainList } from "@/components/domains/DomainList";
+import { CaddyStatusCard } from "@/components/domains/CaddyStatusCard";
+import { DeleteDomainDialog } from "@/components/domains/DeleteDomainDialog";
+import { DNSConfigurationGuide } from "@/components/domains/DNSConfigurationGuide";
+
+import { Button } from "@/components/ui/button";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+interface DomainMapping {
+  id: number;
+  domain: string;
+  port: number;
+  type: "caddy" | "nginx";
+  enable_ssl: boolean;
+  email?: string;
+  project_id?: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export function DomainsPage() {
-  const [domain, setDomain] = React.useState("");
-  const [port, setPort] = React.useState("80");
-  const [email, setEmail] = React.useState("");
-  const [projectId, setProjectId] = React.useState<string>("");
-  const [enableSSL, setEnableSSL] = React.useState(true);
-  const [editingId, setEditingId] = React.useState<number | null>(null);
-  const [result, setResult] = React.useState<Record<string, unknown> | null>(null);
+  const qc = useQueryClient();
 
-  const caddyStatus = useQuery({ queryKey: ["caddy-status"], queryFn: platformApi.caddyStatus });
-  const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects });
-  const mappings = useQuery({ queryKey: ["domain-mappings"], queryFn: platformApi.listDomainMappings });
-  const [installCommand, setInstallCommand] = React.useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  const generate = useMutation({
-    mutationFn: platformApi.generateDomainProxy,
-    onSuccess: (data) => {
-      setResult(data as Record<string, unknown>);
-      toast.success("Proxy config generated");
-      mappings.refetch();
-    },
-    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Generation failed"),
+  const [editingMapping, setEditingMapping] =
+    React.useState<DomainMapping | null>(null);
+
+  const [deleteDialogOpen, setDeleteDialogOpen] =
+    React.useState(false);
+
+  const [deleteTargetId, setDeleteTargetId] =
+    React.useState<number | null>(null);
+
+  const [deleteTargetDomain, setDeleteTargetDomain] =
+    React.useState("");
+
+  // Queries
+  const caddyStatus = useQuery({
+    queryKey: ["caddy-status"],
+    queryFn: platformApi.caddyStatus,
   });
 
+  const projects = useQuery({
+    queryKey: ["projects"],
+    queryFn: platformApi.listProjects,
+  });
+
+  const mappings = useQuery({
+    queryKey: ["domain-mappings"],
+    queryFn: async () => {
+      const result =
+        await platformApi.listDomainMappings();
+
+      return result.mappings as DomainMapping[];
+    },
+  });
+
+  // Save Mutation
   const saveMapping = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (data: {
+      domain: string;
+      port: number;
+      email: string;
+      projectId: string;
+      enableSSL: boolean;
+    }) => {
       const payload = {
-        domain: domain.trim(),
-        port: Number(port),
+        domain: data.domain,
+        port: data.port,
         type: "caddy" as const,
-        enable_ssl: enableSSL,
-        email: email.trim() || undefined,
-        project_id: projectId ? Number(projectId) : undefined,
+        enable_ssl: data.enableSSL,
+        email: data.email || undefined,
+        project_id: data.projectId
+          ? Number(data.projectId)
+          : null,
       };
-      if (editingId) {
-        return platformApi.updateDomainMapping(editingId, payload);
+
+      if (editingMapping) {
+        await platformApi.updateDomainMapping(
+          editingMapping.id,
+          payload
+        );
+      } else {
+        await platformApi.createDomainMapping(payload);
       }
-      return platformApi.createDomainMapping(payload);
     },
-    onSuccess: () => {
-      toast.success(editingId ? "Mapping updated" : "Mapping saved");
-      setEditingId(null);
-      setDomain("");
-      setPort("80");
-      setEmail("");
-      setProjectId("");
-      mappings.refetch();
+
+    onSuccess: async () => {
+      toast.success(
+        editingMapping
+          ? "Domain updated successfully"
+          : "Domain added successfully"
+      );
+
+      setDialogOpen(false);
+      setEditingMapping(null);
+
+      await qc.invalidateQueries({
+        queryKey: ["domain-mappings"],
+      });
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Save failed"),
+
+    onError: (error: any) => {
+      toast.error(
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        "Failed to save mapping"
+      );
+    },
   });
 
   const deleteMapping = useMutation({
-    mutationFn: (id: number) => platformApi.deleteDomainMapping(id),
-    onSuccess: () => {
-      toast.success("Mapping deleted");
-      mappings.refetch();
+    mutationFn: async (id: number) => {
+      return await platformApi.deleteDomainMapping(id);
     },
-    onError: (err: any) => toast.error(err?.response?.data?.error?.message ?? "Delete failed"),
+
+    onMutate: async (id) => {
+      await qc.cancelQueries({
+        queryKey: ["domain-mappings"],
+      });
+
+      const previousMappings =
+        qc.getQueryData<DomainMapping[]>([
+          "domain-mappings",
+        ]);
+
+      qc.setQueryData<DomainMapping[]>(
+        ["domain-mappings"],
+        (old = []) =>
+          old.filter((mapping) => mapping.id !== id)
+      );
+
+      return { previousMappings };
+    },
+
+    onError: (error: any, _, context) => {
+      if (context?.previousMappings) {
+        qc.setQueryData(
+          ["domain-mappings"],
+          context.previousMappings
+        );
+      }
+
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        "Failed to delete domain mapping";
+
+      toast.error(message);
+    },
+
+    onSuccess: () => {
+      toast.success(
+        "Domain mapping deleted successfully"
+      );
+
+      setDeleteDialogOpen(false);
+      setDeleteTargetId(null);
+      setDeleteTargetDomain("");
+    },
+
+    onSettled: () => {
+      qc.invalidateQueries({
+        queryKey: ["domain-mappings"],
+      });
+    },
   });
 
+  // Caddy
   const installCaddy = useMutation({
-    mutationFn: platformApi.caddyInstall,
-    onSuccess: (data: any) => {
-      if (data?.install_command) {
-        setInstallCommand(String(data.install_command));
-      }
-      if (data?.executed) {
-        toast.success("Caddy install started");
-      }
-      caddyStatus.refetch();
-    },
-    onError: (err: any) => {
-      const msg = String(err?.response?.data?.error?.message ?? "Caddy install failed");
-      const concise = msg.split("\n").slice(-1)[0] || msg;
-      toast.error(concise);
+    mutationFn: () => platformApi.caddyInstall(true),
+
+    onSuccess: () => {
+      toast.success("Caddy installation started");
+
+      setTimeout(() => {
+        qc.invalidateQueries({
+          queryKey: ["caddy-status"],
+        });
+      }, 2000);
     },
   });
+
+  const reloadCaddy = useMutation({
+    mutationFn: () => platformApi.caddyReload(),
+
+    onSuccess: () => {
+      toast.success("Caddy reloaded");
+    },
+  });
+
+  // Handlers
+  const handleAdd = () => {
+    setEditingMapping(null);
+    setDialogOpen(true);
+  };
+
+  const handleEdit = (mapping: DomainMapping) => {
+    setEditingMapping(mapping);
+    setDialogOpen(true);
+  };
+
+  const handleDelete = (id: number) => {
+    const mapping = mappings.data?.find(
+      (m) => m.id === id
+    );
+
+    if (!mapping) return;
+
+    setDeleteTargetId(id);
+    setDeleteTargetDomain(mapping.domain);
+    setDeleteDialogOpen(true);
+  };
 
   return (
     <PageShell>
-      <PageHeader title="Domains" subtitle="Domains, SSL, and routing" />
+      <PageHeader
+        title="Domains & Reverse Proxy"
+        subtitle="Manage domains and HTTPS routing"
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Caddy</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-1 text-xs ${caddyStatus.data?.installed ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-              {caddyStatus.data?.installed ? "Caddy installed" : "Caddy not installed"}
-            </span>
-            {caddyStatus.data?.version ? (
-              <span className="rounded-full bg-muted px-2 py-1 text-xs">{caddyStatus.data.version}</span>
-            ) : null}
-          </div>
-          {installCommand ? (
-            <div className="rounded-lg border border-border/70 bg-muted/20 p-3 text-xs">{installCommand}</div>
-          ) : null}
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => window.open("https://caddyserver.com/docs/", "_blank", "noopener,noreferrer")}>Docs</Button>
-            <Button size="sm" variant="outline" onClick={() => window.open("https://caddyserver.com/docs/install", "_blank", "noopener,noreferrer")}>Install guide</Button>
-            <Button size="sm" variant="outline" onClick={() => installCaddy.mutate(false)}>Show install command</Button>
-            <Button size="sm" onClick={() => installCaddy.mutate(true)} disabled={installCaddy.isPending}>
-              {installCaddy.isPending ? "Installing..." : "Install Caddy"}
+      <div className="space-y-6">
+        <CaddyStatusCard
+          status={caddyStatus.data || null}
+          isLoading={caddyStatus.isLoading}
+          onInstall={async () => {
+            await installCaddy.mutateAsync();
+          }}
+
+          onReload={async () => {
+            await reloadCaddy.mutateAsync();
+          }}
+        />
+
+        {/* Table Section */}
+        <DomainList
+          mappings={mappings.data || []}
+          projects={projects.data || []}
+          isLoading={mappings.isLoading}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          deletingId={
+            deleteMapping.isPending
+              ? deleteTargetId || undefined
+              : undefined
+          }
+          headerAction={
+            <Button onClick={handleAdd}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Domain
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          }
+        />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Generate reverse proxy config</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Input placeholder="Domain" value={domain} onChange={(e) => setDomain(e.target.value)} />
-          <Input placeholder="Target port" value={port} onChange={(e) => setPort(e.target.value)} />
-          <Input placeholder="Email (for TLS)" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <select
-            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-          >
-            <option value="">Project (optional)</option>
-            {(projects.data ?? []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <input type="checkbox" checked={enableSSL} onChange={(e) => setEnableSSL(e.target.checked)} />
-            Enable TLS (Caddy auto HTTPS)
-          </label>
-          <Button
-            onClick={() =>
-              generate.mutate({
-                domain: domain.trim(),
-                port: Number(port),
-                type: "caddy",
-                enable_ssl: enableSSL,
-                email: email.trim() || undefined,
-                project_id: projectId ? Number(projectId) : undefined,
-              })
-            }
-            disabled={!domain.trim() || !port}
-          >
-            Generate config
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => saveMapping.mutate()}
-            disabled={!domain.trim() || !port}
-          >
-            {editingId ? "Save changes" : "Save mapping"}
-          </Button>
-          {editingId ? (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setEditingId(null);
-                setDomain("");
-                setPort("80");
-                setEmail("");
-                setProjectId("");
-                setEnableSSL(true);
+        <DNSConfigurationGuide />
+
+        {/* Add/Edit Dialog */}
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+        >
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingMapping
+                  ? "Edit Domain Mapping"
+                  : "Add Domain Mapping"}
+              </DialogTitle>
+
+              <DialogDescription>
+                Configure reverse proxy routing and HTTPS.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DomainForm
+              projects={projects.data || []}
+              isEditing={!!editingMapping}
+              initialData={
+                editingMapping
+                  ? {
+                    domain: editingMapping.domain,
+                    port: String(editingMapping.port),
+                    email:
+                      editingMapping.email || "",
+                    projectId:
+                      editingMapping.project_id
+                        ? String(
+                          editingMapping.project_id
+                        )
+                        : "",
+                    enableSSL:
+                      editingMapping.enable_ssl,
+                  }
+                  : undefined
+              }
+              onSubmit={(data) =>
+                saveMapping.mutateAsync(data)
+              }
+              onCancel={() => {
+                setDialogOpen(false);
+                setEditingMapping(null);
               }}
-            >
-              Cancel edit
-            </Button>
-          ) : null}
-          {result ? (
-            <pre className="max-h-80 overflow-auto rounded-lg bg-muted/40 p-3 text-xs">{JSON.stringify(result, null, 2)}</pre>
-          ) : null}
-        </CardContent>
-      </Card>
+              submitLabel={
+                editingMapping
+                  ? "Save Changes"
+                  : "Create Mapping"
+              }
+            />
+          </DialogContent>
+        </Dialog>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Domain mappings</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-muted-foreground">
-                <th className="py-2">Domain</th>
-                <th className="py-2">Port</th>
-                <th className="py-2">Project</th>
-                <th className="py-2">TLS</th>
-                <th className="py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(mappings.data?.mappings ?? []).map((m) => {
-                const projectName = projects.data?.find((p) => p.id === (m.project_id ?? 0))?.name ?? "-";
-                return (
-                  <tr key={m.id} className="border-t border-border/70">
-                    <td className="py-2 font-mono text-xs">{m.domain}</td>
-                    <td className="py-2 font-mono text-xs">{m.port}</td>
-                    <td className="py-2 text-xs text-muted-foreground">{projectName}</td>
-                    <td className="py-2 text-xs">{m.enable_ssl ? "Enabled" : "Off"}</td>
-                    <td className="py-2 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setEditingId(m.id);
-                            setDomain(m.domain);
-                            setPort(String(m.port));
-                            setEmail(m.email ?? "");
-                            setProjectId(m.project_id ? String(m.project_id) : "");
-                            setEnableSSL(Boolean(m.enable_ssl));
-                          }}
-                        >
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="destructive" onClick={() => deleteMapping.mutate(m.id)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!mappings.data?.mappings?.length ? (
-                <tr>
-                  <td colSpan={5} className="py-4 text-center text-xs text-muted-foreground">
-                    No domain mappings yet.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+        {/* Delete Dialog */}
+        <DeleteDomainDialog
+          isOpen={deleteDialogOpen}
+          domain={deleteTargetDomain}
+          isDeleting={deleteMapping.isPending}
+          onConfirm={async () => {
+            if (deleteTargetId) {
+              await deleteMapping.mutateAsync(deleteTargetId);
+            }
+          }}
+          onCancel={() => {
+            setDeleteDialogOpen(false);
+            setDeleteTargetId(null);
+          }}
+        />
+      </div>
     </PageShell>
   );
 }

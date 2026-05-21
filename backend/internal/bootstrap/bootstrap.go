@@ -132,11 +132,13 @@ func Build(cfg *config.Config) (*app.App, error) {
 		ErrorHandler:            httperrors.FiberErrorHandler,
 	})
 
-	container := &app.App{
-		Fiber:  f,
-		DB:     db,
-		Config: cfg,
-	}
+	// container := &app.App{
+	// 	Fiber:  f,
+	// 	DB:     db,
+	// 	Config: cfg,
+	// }
+
+	container := app.New(f, db, cfg)
 
 	docs.SwaggerInfo.Host = swaggerHost(cfg)
 	docs.SwaggerInfo.BasePath = "/"

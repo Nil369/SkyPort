@@ -462,6 +462,8 @@ export const platformApi = {
   caddyStatus: async () => (await http.get<{ installed: boolean; path?: string; version?: string }>("/proxy/caddy/status")).data,
   caddyInstall: async (execute: boolean) => (await http.post("/proxy/caddy/install", { execute })).data,
 
+  caddyReload: async () => (await http.post("/proxy/caddy/reload", {})).data,
+  getDNSGuide: async () => (await http.get("/proxy/dns/guide")).data,
   checkUpdates: async () => (await http.get<UpdateCheckResult>("/updates/check")).data,
 
   githubBridgeInfo: async () => (await http.get<GitHubBridgeInfo>("/github/bridge")).data,
