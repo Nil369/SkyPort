@@ -14,12 +14,13 @@ import { ResizablePanels } from "@/components/layout/ResizablePanels";
 import { CodeEditor } from "@/components/editor/CodeEditor";
 import { CodeExplorerTree } from "@/features/code-editor/components/CodeExplorerTree";
 import { FilePreview } from "@/features/code-editor/components/FilePreview";
+import { EditorTabBar } from "@/components/editor/EditorTabBar";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
+import { useEditorTabStore } from "@/stores/editorTabStore";
 import { TerminalEmulator } from "@/features/terminal/components/TerminalEmulator";
 
-type UploadEntry = { file: File; relativePath?: string };
 type ContextTarget = { path: string; name: string; isDir: boolean };
 
 export function CodeEditorPage() {
@@ -27,13 +28,9 @@ export function CodeEditorPage() {
   const token = useAuthStore((s) => s.accessToken);
   const projects = useQuery({ queryKey: ["projects"], queryFn: platformApi.listProjects });
   const [projectPath, setProjectPath] = React.useState("");
-  const [selectedPath, setSelectedPath] = React.useState("");
-  const [code, setCode] = React.useState("");
   const [explorerRoot, setExplorerRoot] = React.useState("");
   const [activeDirPath, setActiveDirPath] = React.useState("");
   const [customPath, setCustomPath] = React.useState("");
-  const [previewUrl, setPreviewUrl] = React.useState("");
-  const [savedCode, setSavedCode] = React.useState("");
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
   const [terminalOpen, setTerminalOpen] = React.useState(false);
@@ -44,36 +41,28 @@ export function CodeEditorPage() {
   const [deleteTarget, setDeleteTarget] = React.useState<ContextTarget | null>(null);
   const [newName, setNewName] = React.useState("");
 
+  const { tabs, activeTabId, addTab, updateTab, closeAllTabs } = useEditorTabStore();
+  const activeTab = tabs.find(t => t.id === activeTabId);
+
   const readFile = useMutation({
     mutationFn: platformApi.readFile,
-    onSuccess: (res) => {
-      const next = res.content ?? "";
-      setCode(next);
-      setSavedCode(next);
-    },
+    onSuccess: (data, path) => {
+      const tab = useEditorTabStore.getState().tabs.find(t => t.filePath === path);
+      if (tab) {
+        useEditorTabStore.getState().updateTab(tab.id, { content: data.content ?? "" });
+      }
+    }
   });
 
   const saveFile = useMutation({
     mutationFn: ({ path, content }: { path: string; content: string }) => platformApi.writeFile(path, content),
-    onSuccess: (_res, vars) => {
-      setSavedCode(vars.content);
+    onSuccess: (_res) => {
+      if (activeTab?.id) {
+        updateTab(activeTab.id, { isDirty: false });
+      }
       toast.success("File saved");
     },
     onError: () => toast.error("Save failed"),
-  });
-
-  const uploadFiles = useMutation({
-    mutationFn: async ({ path, files }: { path: string; files: UploadEntry[] }) => {
-      for (const file of files) {
-        await platformApi.uploadFile(path, file.file, { relativePath: file.relativePath });
-      }
-      return files.length;
-    },
-    onSuccess: (count) => {
-      toast.success(`${count} file${count === 1 ? "" : "s"} uploaded`);
-      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
-    },
-    onError: () => toast.error("Upload failed"),
   });
 
   const createFile = useMutation({
@@ -115,8 +104,19 @@ export function CodeEditorPage() {
     onError: () => toast.error("Rename failed"),
   });
 
-  const selectedLanguage = React.useMemo(() => detectLanguage(selectedPath), [selectedPath]);
-  const isDirty = !!selectedPath && !previewUrl && code !== savedCode;
+  const uploadFiles = useMutation({
+    mutationFn: async ({ path, files }: { path: string; files: { file: File; relativePath?: string }[] }) => {
+      await Promise.all(files.map(({ file, relativePath }) => platformApi.uploadFile(path, file, { relativePath })));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["code-editor-files"] });
+      toast.success("Files uploaded");
+    },
+    onError: () => toast.error("Upload failed"),
+  });
+
+  const selectedLanguage = React.useMemo(() => detectLanguage(activeTab?.filePath ?? ""), [activeTab?.filePath]);
+  const isDirty = !!activeTab && !isPreviewable(activeTab.filePath) && activeTab.isDirty;
 
   const openUploadForPath = React.useCallback((path: string, includeFolder = false) => {
     setUploadTargetPath(path);
@@ -136,13 +136,13 @@ export function CodeEditorPage() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (!selectedPath || !!previewUrl || saveFile.isPending || !isDirty) return;
-        saveFile.mutate({ path: selectedPath, content: code });
+        if (!activeTab || isPreviewable(activeTab.filePath) || saveFile.isPending || !isDirty) return;
+        saveFile.mutate({ path: activeTab.filePath, content: activeTab.content });
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [code, isDirty, previewUrl, saveFile, selectedPath]);
+  }, [activeTab, isDirty, saveFile]);
 
   return (
     <PageShell className="max-w-350">
@@ -165,10 +165,7 @@ export function CodeEditorPage() {
               setExplorerRoot(next);
               setActiveDirPath(next);
               setCustomPath(next);
-              setSelectedPath("");
-              setPreviewUrl("");
-              setCode("");
-              setSavedCode("");
+              closeAllTabs();
               setTerminalOpen(false);
             }}
           >
@@ -193,10 +190,7 @@ export function CodeEditorPage() {
               setExplorerRoot(p);
               setActiveDirPath(p);
               setProjectPath(p);
-              setSelectedPath("");
-              setPreviewUrl("");
-              setCode("");
-              setSavedCode("");
+              closeAllTabs();
               setTerminalOpen(false);
             }}
           >
@@ -267,13 +261,13 @@ export function CodeEditorPage() {
             <FolderOpen className="size-4" />
             Folder upload
           </Button>
-          <Button variant="outline" onClick={() => selectedPath && handleDownload(selectedPath, token)} disabled={!selectedPath}>
+          <Button variant="outline" onClick={() => activeTab && handleDownload(activeTab.filePath, token)} disabled={!activeTab}>
             <Download className="size-4" />
             Download
           </Button>
           <Button
-            onClick={() => selectedPath && saveFile.mutate({ path: selectedPath, content: code })}
-            disabled={!selectedPath || !!previewUrl || !isDirty}
+            onClick={() => activeTab && saveFile.mutate({ path: activeTab.filePath, content: activeTab.content })}
+            disabled={!activeTab || isPreviewable(activeTab.filePath) || !isDirty}
           >
             Save file (Ctrl/Cmd+S)
           </Button>
@@ -317,21 +311,30 @@ export function CodeEditorPage() {
                         rootPath={explorerRoot}
                         depth={0}
                         activeDirPath={activeDirPath}
-                        selectedPath={selectedPath}
+                        selectedPath={activeTab?.filePath ?? ""}
                         onOpenDirectory={(path) => {
                           setActiveDirPath(path);
                           setCustomPath(path);
                         }}
                         onOpenFile={(item) => {
-                          setSelectedPath(item.path);
-                          if (isPreviewable(item.path)) {
-                            setPreviewUrl(buildPreviewUrl(item.path, token));
-                            setCode("");
-                            setSavedCode("");
-                            return;
+                          const isPreview = isPreviewable(item.path);
+                          const lang = isPreview
+                            ? (item.path.split('.').pop()?.toLowerCase() ?? 'text')
+                            : detectLanguage(item.path);
+
+                          const existingTab = tabs.find(t => t.filePath === item.path);
+                          addTab({
+                            id: `tab-${item.path}`,
+                            filePath: item.path,
+                            fileName: item.name,
+                            language: lang,
+                            isDirty: false,
+                            content: "",
+                          });
+
+                          if (!isPreview && !existingTab) {
+                            readFile.mutate(item.path);
                           }
-                          setPreviewUrl("");
-                          readFile.mutate(item.path);
                         }}
                         onContextMenu={(item, x, y) => setContextMenu({ x, y, item: { path: item.path, name: item.name, isDir: item.is_dir } })}
                       />
@@ -340,50 +343,39 @@ export function CodeEditorPage() {
                 }
                 right={
                   <div className="h-full">
-                    <div className="flex items-center justify-between border-b border-border/60 px-3 py-2 text-xs text-muted-foreground">
-                      <span className="truncate">{selectedPath || "No file selected"}</span>
-                      <div className="flex items-center gap-2">
-                        {selectedPath ? (
-                          <Button size="sm" variant="outline" onClick={() => handleDownload(selectedPath, token)}>
-                            <Download className="size-4" />
-                            Download
-                          </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedPath("");
-                            setPreviewUrl("");
-                            setCode("");
-                            setSavedCode("");
+                    <div className="flex flex-col h-full min-h-0">
+                      {tabs.length > 0 ? (
+                        <EditorTabBar
+                          onNewFile={() => {
+                            // Optional: trigger new file creation
                           }}
-                        >
-                          <ArrowLeft className="size-4" />
-                          Back
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="h-[calc(68vh-37px)]">
-                      {previewUrl ? (
-                        <FilePreview
-                          url={previewUrl}
-                          path={selectedPath}
-                          onDownload={() => handleDownload(selectedPath, token)}
                         />
-                      ) : (
-                        <div className="flex h-full min-h-0 flex-col">
-                          <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
-                            <span className="truncate">{selectedPath ? `Editing ${selectedPath}` : "Select a file to start editing"}</span>
-                            <span>
-                              {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
-                            </span>
+                      ) : null}
+                      <div className="flex-1 min-h-0">
+                        {activeTab && isPreviewable(activeTab.filePath) ? (
+                          <FilePreview
+                            url={buildPreviewUrl(activeTab.filePath, token)}
+                            path={activeTab.filePath}
+                            onDownload={() => handleDownload(activeTab.filePath, token)}
+                          />
+                        ) : activeTab ? (
+                          <div className="flex h-full min-h-0 flex-col">
+                            <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+                              <span className="truncate">Editing {activeTab.fileName}</span>
+                              <span>
+                                {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
+                              </span>
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-hidden">
+                              <CodeEditor value={activeTab.content} onChange={(v) => updateTab(activeTab.id, { content: v, isDirty: true })} language={selectedLanguage} />
+                            </div>
                           </div>
-                          <div className="min-h-0 flex-1 overflow-hidden">
-                            <CodeEditor value={code} onChange={setCode} language={selectedLanguage} />
+                        ) : (
+                          <div className="flex items-center justify-center h-full text-muted-foreground">
+                            Select a file to start editing
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 }
@@ -456,7 +448,7 @@ export function CodeEditorPage() {
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setSelectedPath(contextMenu.item.path); setPreviewUrl(""); setCode(""); readFile.mutate(contextMenu.item.path); setContextMenu(null); }}>
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { const isPreview = isPreviewable(contextMenu.item.path); const lang = isPreview ? (contextMenu.item.path.split('.').pop()?.toLowerCase() ?? 'text') : detectLanguage(contextMenu.item.path); const existingTab = tabs.find(t => t.filePath === contextMenu.item.path); addTab({ id: `tab-${contextMenu.item.path}`, filePath: contextMenu.item.path, fileName: contextMenu.item.name, language: lang, isDirty: false, content: "" }); if (!isPreview && !existingTab) { readFile.mutate(contextMenu.item.path); } setContextMenu(null); }}>
             <ArrowLeft className="size-4" /> Open
           </button>
           <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); openRenameDialog(contextMenu.item); }}>
@@ -512,7 +504,8 @@ function isPreviewable(path: string) {
     ".pdf",
     ".docx", ".pptx", ".ppt",
     ".mp3", ".wav", ".ogg",
-    ".mp4", ".mkv", ".webm"
+    ".mp4", ".mkv", ".webm",
+    ".xlsx", ".xls", ".csv"
   ];
   return previewExtensions.some(ext => p.endsWith(ext));
 }
@@ -545,12 +538,12 @@ function detectLanguage(path: string) {
   if (["json"].includes(ext)) return "json";
   if (["md"].includes(ext)) return "markdown";
   if (["py"].includes(ext)) return "python";
-  if (["java","class"].includes(ext)) return "java";
+  if (["java", "class"].includes(ext)) return "java";
   if (["php"].includes(ext)) return "php";
   if (["go"].includes(ext)) return "go";
   if (["rs"].includes(ext)) return "rust";
-  if (["c", "h","C", "H"].includes(ext)) return "c";
-  if (["cpp", "hpp","C++"].includes(ext)) return "cpp";
+  if (["c", "h", "C", "H"].includes(ext)) return "c";
+  if (["cpp", "hpp", "C++"].includes(ext)) return "cpp";
   if (["cs"].includes(ext)) return "csharp";
   if (["rb"].includes(ext)) return "ruby";
   if (["Dockerfile"].includes(ext)) return "dockerfile";

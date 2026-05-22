@@ -195,6 +195,35 @@ button {
   cursor: pointer;
 }
 
+.pptx-fidelity-scope,
+.pptx-fidelity-scope * {
+  box-sizing: border-box !important;
+  letter-spacing: normal !important;
+  line-height: normal !important;
+}
+
+.pptx-fidelity-scope img,
+.pptx-fidelity-scope svg,
+.pptx-fidelity-scope canvas,
+.pptx-fidelity-scope video {
+  max-width: none !important;
+  height: auto;
+}
+
+.pptx-fidelity-scope * {
+  border-color: initial !important;
+  outline: none !important;
+}
+
+.pptx-fidelity-scope p, .pptx-fidelity-scope h1, .pptx-fidelity-scope h2, .pptx-fidelity-scope h3, .pptx-fidelity-scope ul, .pptx-fidelity-scope ol, .pptx-fidelity-scope table {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.pptx-fidelity-scope img, .pptx-fidelity-scope svg { display: block; max-width: none !important; }
+
+.pptx-fidelity-scope { font-family: 'Segoe UI', Arial, sans-serif !important; }
+
 /* Scroll-bar & Text-Seclection Styling */
 
 /* Hide scrollbars on elements with .invisible-scroll */

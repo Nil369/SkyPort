@@ -350,7 +350,7 @@ export const platformApi = {
     (await http.get<{ path: string; items: FsItem[] }>("/files", { params: { path } })).data,
   readFile: async (path: string) =>
     (await http.post<{ path: string; content?: string; preview?: string; encoding?: string; content_type?: string; size?: number }>("/files/read", { path })).data,
-  writeFile: async (path: string, content: string) => (await http.put("/files/write", { path, content })).data,
+  writeFile: async (path: string, content: string, encoding?: "utf8" | "base64") => (await http.put("/files/write", { path, content, encoding })).data,
   createFile: async (path: string, filename: string) => (await http.post("/files/file", { path, filename, content: "" })).data,
   createFolder: async (path: string) => (await http.post("/files/folder", { path })).data,
   renameFile: async (old_path: string, new_path: string) => (await http.patch("/files/rename", { old_path, new_path })).data,
@@ -509,4 +509,7 @@ export const platformApi = {
     working_directory?: string;
   }) => (await http.post<GitHubImportPreview>("/github/import", input)).data,
   githubDisconnect: async () => (await http.post("/github/disconnect", {})).data,
+  // Convert a file on the server using LibreOffice (soffice)
+  convertFile: async (path: string, to: string, saveAs?: string) =>
+    (await http.post<{ preview?: string; content_type?: string; filename?: string; path?: string }>("/files/convert", { path, to, save_as: saveAs })).data,
 };

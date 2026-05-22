@@ -232,7 +232,7 @@ export default function FilePreview({ file, url, filename, mimeType }: FilePrevi
         {isText && fileContent && (
           <Suspense fallback={<div className="p-4">Loading code editor...</div>}>
             <div className="text-xs font-mono overflow-auto max-h-96 bg-muted p-4">
-              <pre className="whitespace-pre-wrap break-words">{fileContent}</pre>
+              <pre className="whitespace-pre-wrap text-wrap">{fileContent}</pre>
             </div>
           </Suspense>
         )}
