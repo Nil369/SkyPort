@@ -8,6 +8,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -64,22 +65,35 @@ type Config struct {
 // Required for twelve-factor style deploys; .env is optional convenience.
 // Searches for .env in: current directory, installation directory (Windows), and /etc/skyport (Linux/macOS).
 func Load() (*Config, error) {
-	// Search for .env in common install locations
-	envPaths := []string{
-		".env",                             // Current directory (local dev)
-		"C:\\Program Files\\SkyPort\\.env", // Windows install dir
-		"/opt/skyport/.env",                // Linux install dir
-		"/usr/local/skyport/.env",          // Linux alternate
-		"/usr/local/opt/skyport/.env",      // macOS install dir
-		"${HOME}/SkyPort/.env",             // User home (macOS/Linux)
+	// Build list of .env paths to try. Include executable directory so installed
+	// binaries find .env placed next to the executable regardless of CWD.
+	envPaths := make([]string, 0, 8)
+	envPaths = append(envPaths, ".env") // Current directory (local dev)
+
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		envPaths = append(envPaths, filepath.Join(exeDir, ".env"))
+	}
+
+	// Common install locations
+	envPaths = append(envPaths,
+		"C:\\Program Files\\SkyPort\\.env",
+		"/opt/skyport/.env",
+		"/usr/local/skyport/.env",
+		"/usr/local/opt/skyport/.env",
+	)
+
+	// Expand ${HOME} to the actual home directory if available
+	if home, err := os.UserHomeDir(); err == nil {
+		envPaths = append(envPaths, filepath.Join(home, "SkyPort", ".env"))
 	}
 
 	// Try to load .env from all known paths (ignore errors)
-	for _, path := range envPaths {
-		if err := godotenv.Load(path); err == nil {
-			break // Successfully loaded from this path
+	for _, p := range envPaths {
+		if p == "" {
+			continue
 		}
-		// Continue to next path on error
+		_ = godotenv.Load(p)
 	}
 
 	port, err := strconv.Atoi(getEnv("SKYPORT_PORT", "8080"))
@@ -127,6 +141,40 @@ func Load() (*Config, error) {
 		GitHubWebBaseURL:    getEnv("GITHUB_WEB_BASE_URL", "https://github.com"),
 		GitHubBridgeURL:     getEnv("GITHUB_BRIDGE_URL", "https://skyport.akashhalder.in"),
 		FrontendURL:         getEnv("SKYPORT_FRONTEND_URL", "*"),
+	}
+
+	// Post-process common private-key delivery mechanisms:
+	// 1) Support reading the private key from a file path (env var: GITHUB_APP_PRIVATE_KEY_FILE or APP_PRIVATE_KEY_FILE)
+	// 2) Support escaped newlines (\n) in env values (common when storing PEMs in single-line env vars)
+	if strings.TrimSpace(cfg.GitHubPrivateKey) == "" && strings.TrimSpace(cfg.GitHubAppPrivateKey) == "" {
+		// try file-based private key envs
+		keyPath := getEnv("GITHUB_APP_PRIVATE_KEY_FILE", getEnv("APP_PRIVATE_KEY_FILE", ""))
+		if keyPath == "" {
+			keyPath = getEnv("GITHUB_APP_PRIVATE_KEY_PATH", getEnv("APP_PRIVATE_KEY_PATH", ""))
+		}
+		if keyPath != "" {
+			if b, err := os.ReadFile(strings.TrimSpace(keyPath)); err == nil {
+				key := strings.TrimSpace(string(b))
+				cfg.GitHubPrivateKey = key
+				cfg.GitHubAppPrivateKey = key
+			}
+		}
+	}
+
+	// If the env provided the key with escaped newlines, convert to real newlines.
+	if strings.TrimSpace(cfg.GitHubPrivateKey) == "" {
+		raw := getEnv("GITHUB_PRIVATE_KEY", getEnv("APP_PRIVATE_KEY", ""))
+		if raw != "" && strings.Contains(raw, "\\n") && !strings.Contains(raw, "\n") {
+			fixed := strings.ReplaceAll(raw, "\\n", "\n")
+			cfg.GitHubPrivateKey = strings.TrimSpace(fixed)
+		}
+	}
+	if strings.TrimSpace(cfg.GitHubAppPrivateKey) == "" {
+		raw := getEnv("GITHUB_APP_PRIVATE_KEY", getEnv("APP_PRIVATE_KEY", ""))
+		if raw != "" && strings.Contains(raw, "\\n") && !strings.Contains(raw, "\n") {
+			fixed := strings.ReplaceAll(raw, "\\n", "\n")
+			cfg.GitHubAppPrivateKey = strings.TrimSpace(fixed)
+		}
 	}
 
 	if err := cfg.validate(); err != nil {
