@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import toast from "react-hot-toast";
 import { ArrowLeft, CheckSquare, Download, FileSearch, Folder, FolderOpen, FolderPlus, PencilLine, Trash2, Upload } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -104,7 +105,7 @@ export function FilesystemPage() {
         const wb = XLSX.read(res.preview, { type: "base64" });
         const first = wb.SheetNames[0];
         const rows = XLSX.utils.sheet_to_json<string[]>(wb.Sheets[first], { header: 1 }) as string[][];
-        setSheetRows(rows.slice(0, 200));
+        setSheetRows(rows);
         setValue("");
         setPdfUrl("");
         setImageUrl("");
@@ -250,7 +251,7 @@ export function FilesystemPage() {
         setPdfUrl(previewUrl(path, token));
         return;
       }
-      if (looksLikePptx(path) || looksLikeVideo(path)) {
+      if (looksLikePptx(path) || looksLikeVideo(path) || looksLikeSheet(path) || path.toLowerCase().endsWith(".docx") || path.toLowerCase().endsWith(".doc")) {
         return;
       }
       readFile.mutate(path);
@@ -459,22 +460,7 @@ export function FilesystemPage() {
                     {selected && isPreviewable(selected) ? (
                       <FilePreview url={pdfUrl || imageUrl || previewUrl(selected, token)} path={selected} onDownload={() => handleDownload(selected)} />
                     ) : sheetRows.length > 0 ? (
-                      <div className="h-full overflow-auto p-3">
-                        <div className="mb-2 text-xs text-muted-foreground">Excel preview (first sheet, first 200 rows)</div>
-                        <table className="w-full border-collapse text-xs">
-                          <tbody>
-                            {sheetRows.map((row, idx) => (
-                              <tr key={idx} className="border-b border-border/50">
-                                {row.map((cell, cidx) => (
-                                  <td key={cidx} className="max-w-80 truncate border-r border-border/30 px-2 py-1">
-                                    {String(cell ?? "")}
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                      <SheetVirtualizer rows={sheetRows} />
                     ) : (
                       <CodeEditor value={value} onChange={setValue} language={detectLanguage(selected, previewMime)} />
                     )}
@@ -563,7 +549,7 @@ export function FilesystemPage() {
 
 function isPreviewable(path: string) {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
-  return ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "pdf", "docx", "pptx", "ppt", "mp3", "wav", "ogg", "mp4", "mkv", "webm", "mov", "ogv"].includes(ext);
+  return ["png", "jpg", "jpeg", "gif", "webp", "svg", "ico", "pdf", "docx", "pptx", "ppt", "mp3", "wav", "ogg", "mp4", "mkv", "webm", "mov", "ogv", "xlsx", "xls", "csv"].includes(ext);
 }
 
 function looksLikeSheet(path: string) {
@@ -623,4 +609,58 @@ function detectLanguage(path: string, mime: string) {
   if (["xml", "svg"].includes(ext)) return "xml";
   if (["sql"].includes(ext)) return "sql";
   return "markdown";
+}
+
+function SheetVirtualizer({ rows }: { rows: (string | number | boolean | Date | null | undefined)[][] }) {
+  const parentRef = React.useRef<HTMLDivElement>(null);
+  
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 32,
+    overscan: 10,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+
+  return (
+    <div className="h-full overflow-hidden flex flex-col p-3">
+      <div className="mb-2 text-xs text-muted-foreground shrink-0">Excel preview ({rows.length} total rows)</div>
+      <div ref={parentRef} className="flex-1 overflow-y-auto" style={{ scrollbarGutter: 'stable' }}>
+        <table className="w-full border-collapse text-xs">
+          <tbody style={{ height: `${totalSize}px`, position: 'relative' }}>
+            {virtualItems.map(virtualItem => (
+              <tr
+                key={virtualItem.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualItem.start}px)`,
+                  display: 'table',
+                  tableLayout: 'fixed',
+                }}
+                className="border-b border-border/50 hover:bg-muted/50 transition-colors"
+              >
+                <td className="px-2 py-1 text-xs text-muted-foreground min-w-12 text-right pr-4 border-r border-border/30 sticky left-0 bg-muted/20">
+                  {virtualItem.index + 1}
+                </td>
+                {rows[virtualItem.index]?.map((cell, cidx) => (
+                  <td
+                    key={cidx}
+                    className="max-w-80 truncate border-r border-border/30 px-2 py-1"
+                    title={String(cell ?? '')}
+                  >
+                    {String(cell ?? '')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

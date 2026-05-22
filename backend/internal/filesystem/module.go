@@ -2,14 +2,18 @@ package filesystem
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/base64"
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/gofiber/fiber/v2"
@@ -30,6 +34,7 @@ func (m *Module) Register(a *app.App) error {
 
 	r := a.Fiber.Group("/api/v1/files")
 	r.Get("/", listHandler())
+	r.Post("/convert", convertHandler())
 	r.Post("/folder", createFolderHandler())
 	r.Delete("/", deleteHandler())
 	r.Patch("/rename", renameHandler())
@@ -575,4 +580,174 @@ func zipDirectory(dir string) (string, error) {
 		return "", err
 	}
 	return tmp.Name(), nil
+}
+
+func libreOfficeUserInstallationURI(dir string) string {
+	abs := filepath.Clean(dir)
+	if resolved, err := filepath.Abs(abs); err == nil {
+		abs = resolved
+	}
+
+	path := filepath.ToSlash(abs)
+	if runtime.GOOS == "windows" {
+		// Windows drive paths must be represented as /C:/... in file URIs.
+		if len(path) >= 2 && path[1] == ':' {
+			path = "/" + path
+		}
+	}
+
+	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
+type convertRequest struct {
+	Path   string `json:"path" validate:"required,max=2048"`
+	To     string `json:"to" validate:"required,oneof=html pdf png docx pptx"`
+	SaveAs string `json:"save_as" validate:"omitempty,max=255"`
+}
+
+// convertHandler converts documents using LibreOffice (soffice) in headless mode.
+// Supported conversions: docx -> html|pdf, pptx -> png|html|pdf, html -> docx
+func convertHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var req convertRequest
+		if err := validator.ParseAndValidate(c, &req); err != nil {
+			return err
+		}
+
+		srcPath, err := normalizeAbsolutePath(req.Path)
+		if err != nil {
+			return response.BadRequest(c, err.Error())
+		}
+		// Ensure source exists
+		if _, err := os.Stat(srcPath); err != nil {
+			return response.Error(c, fiber.StatusNotFound, "file_not_found", "file does not exist")
+		}
+
+		// Prepare output dir
+		outDir, err := os.MkdirTemp("", "skyport-conv-*")
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "tempdir_failed", err.Error())
+		}
+		defer os.RemoveAll(outDir)
+
+		// Map requested target format to soffice convert-to argument
+		target := req.To
+		// Use LibreOffice soffice for conversion when available
+		soffice, lookErr := exec.LookPath("soffice")
+		if lookErr != nil {
+			if runtime.GOOS == "windows" {
+				commonPaths := []string{
+					`C:\Program Files\LibreOffice\program\soffice.exe`,
+					`C:\Program Files (x86)\LibreOffice\program\soffice.exe`,
+				}
+				for _, p := range commonPaths {
+					if _, err := os.Stat(p); err == nil {
+						soffice = p
+						lookErr = nil
+						break
+					}
+				}
+			}
+		}
+		if lookErr != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "soffice_missing", "LibreOffice (soffice) not installed on server")
+		}
+
+		// Build command
+		// Use per-request profile to avoid lock-contention failures when multiple converts run together.
+		loProfileDir, err := os.MkdirTemp("", "skyport-lo-profile-*")
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "temp_profile_failed", err.Error())
+		}
+		defer os.RemoveAll(loProfileDir)
+
+		convertArg := target
+		if target == "html" {
+			ext := strings.ToLower(filepath.Ext(srcPath))
+			switch ext {
+			case ".docx", ".doc":
+				convertArg = "html:XHTML Writer File:UTF8"
+			case ".pptx", ".ppt":
+				convertArg = "html:impress_html_Export"
+			default:
+				convertArg = "html"
+			}
+		}
+
+		args := []string{
+			"--headless",
+			"--invisible",
+			"--nologo",
+			"--nodefault",
+			"--nofirststartwizard",
+			"--norestore",
+			"--nolockcheck",
+			"-env:UserInstallation=" + libreOfficeUserInstallationURI(loProfileDir),
+			"--convert-to", convertArg,
+			"--outdir", outDir,
+			srcPath,
+		}
+
+		ctx, cancel := context.WithTimeout(c.Context(), 45*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, soffice, args...)
+		// run
+		output, err := cmd.CombinedOutput()
+		if ctx.Err() == context.DeadlineExceeded {
+			return response.ErrorWithDetails(c, fiber.StatusInternalServerError, "convert_timeout", "conversion timed out", fiber.Map{"timeout_ms": 45000, "output": string(output)})
+		}
+		if err != nil {
+			return response.ErrorWithDetails(c, fiber.StatusInternalServerError, "convert_failed", "conversion command failed", fiber.Map{"output": string(output), "error": err.Error()})
+		}
+
+		// Locate converted files in outDir
+		files, err := os.ReadDir(outDir)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "read_outdir_failed", err.Error())
+		}
+		if len(files) == 0 {
+			return response.ErrorWithDetails(c, fiber.StatusInternalServerError, "convert_no_output", "no output files produced", fiber.Map{"output": string(output)})
+		}
+
+		// If SaveAs provided, write the first converted file back to original folder
+		if strings.TrimSpace(req.SaveAs) != "" {
+			// Use the first file as the saved artifact
+			first := files[0]
+			outPath := filepath.Join(outDir, first.Name())
+			outBytes, err := os.ReadFile(outPath)
+			if err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "read_output_failed", err.Error())
+			}
+			saveName := req.SaveAs
+			// Resolve destination in same directory as source
+			dest := filepath.Join(filepath.Dir(srcPath), saveName)
+			if err := os.WriteFile(dest, outBytes, 0o644); err != nil {
+				return response.Error(c, fiber.StatusInternalServerError, "save_failed", err.Error())
+			}
+			return response.OK(c, fiber.Map{"path": dest})
+		}
+
+		// Prepare previews for frontend: if multiple files (e.g., pptx->png), return array
+		previews := make([]fiber.Map, 0, len(files))
+		for _, f := range files {
+			outPath := filepath.Join(outDir, f.Name())
+			outBytes, err := os.ReadFile(outPath)
+			if err != nil {
+				continue
+			}
+			encoded := base64.StdEncoding.EncodeToString(outBytes)
+			ext := filepath.Ext(f.Name())
+			contentType := mime.TypeByExtension(ext)
+			if contentType == "" {
+				contentType = http.DetectContentType(outBytes)
+			}
+			previews = append(previews, fiber.Map{"preview": encoded, "content_type": contentType, "filename": f.Name()})
+		}
+
+		if len(previews) == 1 {
+			return response.OK(c, previews[0])
+		}
+		return response.OK(c, fiber.Map{"items": previews})
+	}
 }
