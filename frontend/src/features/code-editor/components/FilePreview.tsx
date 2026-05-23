@@ -90,15 +90,13 @@ export function FilePreview({ url, path, onDownload }: PreviewProps) {
 
   if (ext === "docx") {
     return (
-      <PreviewWrapper className="overflow-hidden" loading={loading} error={error} onDownload={onDownload}>
-        <DocxPreviewAndEditor
-          url={url}
-          path={path}
-          onDownload={onDownload}
-          setLoading={setLoading}
-          setError={setError}
-        />
-      </PreviewWrapper>
+      <DocxPreviewAndEditor
+        url={url}
+        path={path}
+        onDownload={onDownload}
+        setLoading={setLoading}
+        setError={setError}
+      />
     );
   }
 
