@@ -45,6 +45,9 @@ export function FilesystemPage() {
   const uploadInputRef = React.useRef<HTMLInputElement | null>(null);
   const folderInputRef = React.useRef<HTMLInputElement | null>(null);
 
+  const selectedExt = selected.split(".").pop()?.toLowerCase() ?? "";
+  const usesInEditorActions = ["docx", "xlsx", "xls", "csv"].includes(selectedExt);
+
   React.useEffect(() => {
     return () => {
       if (pdfUrl.startsWith("blob:")) URL.revokeObjectURL(pdfUrl);
@@ -440,21 +443,23 @@ export function FilesystemPage() {
                 <div className="h-full bg-card">
                   <div className="flex items-center justify-between border-b border-border/70 px-4 py-3 text-xs text-muted-foreground">
                     <span>{selected || "Editor"}</span>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" onClick={() => setSelected("")}>Back</Button>
-                      <Button size="sm" variant="outline" onClick={() => selected && handleDownload(selected)} disabled={!selected}>
-                        <Download className="size-4" />
-                        Download
-                      </Button>
-                      {selected ? (
-                        <Button size="sm" variant="outline" onClick={() => setPreviewPath(selected)}>
-                          Preview
+                    {!usesInEditorActions && (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setSelected("")}>Back</Button>
+                        <Button size="sm" variant="outline" onClick={() => selected && handleDownload(selected)} disabled={!selected}>
+                          <Download className="size-4" />
+                          Download
                         </Button>
-                      ) : null}
-                      <Button size="sm" onClick={() => selected && writeFile.mutate({ filePath: selected, content: value })} disabled={!selected || writeFile.isPending || !!pdfUrl || !!imageUrl || sheetRows.length > 0}>
-                        Save
-                      </Button>
-                    </div>
+                        {selected ? (
+                          <Button size="sm" variant="outline" onClick={() => setPreviewPath(selected)}>
+                            Preview
+                          </Button>
+                        ) : null}
+                        <Button size="sm" onClick={() => selected && writeFile.mutate({ filePath: selected, content: value })} disabled={!selected || writeFile.isPending || !!pdfUrl || !!imageUrl || sheetRows.length > 0}>
+                          Save
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div className="h-[calc(70vh-40px)]">
                     {selected && isPreviewable(selected) ? (
