@@ -1,38 +1,135 @@
 import type { Extension } from "@codemirror/state";
-import { selectAll, undo, redo } from "@codemirror/commands";
+import {
+  cursorDocEnd,
+  cursorDocStart,
+  cursorGroupLeft,
+  cursorGroupRight,
+  cursorLineBoundaryBackward,
+  cursorLineBoundaryForward,
+  cursorLineEnd,
+  cursorLineDown,
+  cursorLineStart,
+  cursorLineUp,
+  cursorMatchingBracket,
+  deleteCharBackward,
+  deleteCharForward,
+  deleteGroupBackward,
+  deleteGroupForward,
+  deleteLine,
+  deleteToLineEnd,
+  deleteToLineStart,
+  indentLess,
+  indentMore,
+  indentSelection,
+  insertBlankLine,
+  insertNewlineAndIndent,
+  moveLineDown,
+  moveLineUp,
+  redo,
+  redoSelection,
+  selectAll,
+  selectDocEnd,
+  selectDocStart,
+  selectLine,
+  selectLineDown,
+  selectLineUp,
+  selectMatchingBracket,
+  selectParentSyntax,
+  cursorSyntaxLeft,
+  cursorSyntaxRight,
+  splitLine,
+  toggleBlockComment,
+  toggleComment,
+  transposeChars,
+  undo,
+  undoSelection,
+} from "@codemirror/commands";
 import {
   closeSearchPanel,
+  gotoLine,
   findNext,
   findPrevious,
   getSearchQuery,
   openSearchPanel,
+  replaceAll,
+  replaceNext,
   search,
   searchPanelOpen,
+  selectNextOccurrence,
+  selectMatches,
   SearchQuery,
   setSearchQuery,
 } from "@codemirror/search";
+import { acceptCompletion, closeCompletion, startCompletion } from "@codemirror/autocomplete";
+import { foldAll, foldCode, toggleFold, unfoldAll, unfoldCode } from "@codemirror/language";
 import { keymap, type EditorView, type KeyBinding, type Panel } from "@codemirror/view";
 
-type PaletteActionId =
-  | "find-next"
-  | "find-previous"
-  | "undo"
-  | "redo"
-  | "select-all"
-  | "toggle-search-bar";
-
 type PaletteAction = {
-  id: PaletteActionId;
+  id: string;
   label: string;
   execute: (view: EditorView) => void;
 };
 
 const paletteActions: PaletteAction[] = [
+  { id: "open-search", label: "Open Search", execute: (view) => openSearchPanel(view) },
   { id: "find-next", label: "Find Next", execute: (view) => findNext(view) },
   { id: "find-previous", label: "Find Previous", execute: (view) => findPrevious(view) },
+  { id: "goto-line", label: "Go To Line", execute: (view) => gotoLine(view) },
+  { id: "select-next-occurrence", label: "Select Next Occurrence", execute: (view) => selectNextOccurrence(view) },
+  { id: "select-matches", label: "Select All Matches", execute: (view) => selectMatches(view) },
+  { id: "replace-next", label: "Replace Next", execute: (view) => replaceNext(view) },
+  { id: "replace-all", label: "Replace All", execute: (view) => replaceAll(view) },
   { id: "undo", label: "Undo", execute: (view) => undo(view) },
   { id: "redo", label: "Redo", execute: (view) => redo(view) },
+  { id: "undo-selection", label: "Undo Selection", execute: (view) => undoSelection(view) },
+  { id: "redo-selection", label: "Redo Selection", execute: (view) => redoSelection(view) },
   { id: "select-all", label: "Select All", execute: (view) => selectAll(view) },
+  { id: "select-line", label: "Select Line", execute: (view) => selectLine(view) },
+  { id: "select-parent-syntax", label: "Select Parent Syntax", execute: (view) => selectParentSyntax(view) },
+  { id: "cursor-doc-start", label: "Cursor Doc Start", execute: (view) => cursorDocStart(view) },
+  { id: "cursor-doc-end", label: "Cursor Doc End", execute: (view) => cursorDocEnd(view) },
+  { id: "select-doc-start", label: "Select Doc Start", execute: (view) => selectDocStart(view) },
+  { id: "select-doc-end", label: "Select Doc End", execute: (view) => selectDocEnd(view) },
+  { id: "cursor-line-start", label: "Cursor Line Start", execute: (view) => cursorLineStart(view) },
+  { id: "cursor-line-end", label: "Cursor Line End", execute: (view) => cursorLineEnd(view) },
+  { id: "cursor-line-up", label: "Cursor Line Up", execute: (view) => cursorLineUp(view) },
+  { id: "cursor-line-down", label: "Cursor Line Down", execute: (view) => cursorLineDown(view) },
+  { id: "select-line-up", label: "Select Line Up", execute: (view) => selectLineUp(view) },
+  { id: "select-line-down", label: "Select Line Down", execute: (view) => selectLineDown(view) },
+  { id: "cursor-line-boundary-backward", label: "Cursor Line Boundary Backward", execute: (view) => cursorLineBoundaryBackward(view) },
+  { id: "cursor-line-boundary-forward", label: "Cursor Line Boundary Forward", execute: (view) => cursorLineBoundaryForward(view) },
+  { id: "cursor-group-left", label: "Cursor Group Left", execute: (view) => cursorGroupLeft(view) },
+  { id: "cursor-group-right", label: "Cursor Group Right", execute: (view) => cursorGroupRight(view) },
+  { id: "cursor-syntax-left", label: "Cursor Syntax Left", execute: (view) => cursorSyntaxLeft(view) },
+  { id: "cursor-syntax-right", label: "Cursor Syntax Right", execute: (view) => cursorSyntaxRight(view) },
+  { id: "cursor-matching-bracket", label: "Cursor Matching Bracket", execute: (view) => cursorMatchingBracket(view) },
+  { id: "select-matching-bracket", label: "Select Matching Bracket", execute: (view) => selectMatchingBracket(view) },
+  { id: "indent-more", label: "Indent More", execute: (view) => indentMore(view) },
+  { id: "indent-less", label: "Indent Less", execute: (view) => indentLess(view) },
+  { id: "indent-selection", label: "Indent Selection", execute: (view) => indentSelection(view) },
+  { id: "insert-newline-indent", label: "Insert Newline and Indent", execute: (view) => insertNewlineAndIndent(view) },
+  { id: "insert-blank-line", label: "Insert Blank Line", execute: (view) => insertBlankLine(view) },
+  { id: "split-line", label: "Split Line", execute: (view) => splitLine(view) },
+  { id: "move-line-up", label: "Move Line Up", execute: (view) => moveLineUp(view) },
+  { id: "move-line-down", label: "Move Line Down", execute: (view) => moveLineDown(view) },
+  { id: "delete-line", label: "Delete Line", execute: (view) => deleteLine(view) },
+  { id: "delete-char-backward", label: "Delete Character Backward", execute: (view) => deleteCharBackward(view) },
+  { id: "delete-char-forward", label: "Delete Character Forward", execute: (view) => deleteCharForward(view) },
+  { id: "delete-to-line-start", label: "Delete To Line Start", execute: (view) => deleteToLineStart(view) },
+  { id: "delete-to-line-end", label: "Delete To Line End", execute: (view) => deleteToLineEnd(view) },
+  { id: "delete-group-backward", label: "Delete Group Backward", execute: (view) => deleteGroupBackward(view) },
+  { id: "delete-group-forward", label: "Delete Group Forward", execute: (view) => deleteGroupForward(view) },
+  { id: "transpose-chars", label: "Transpose Characters", execute: (view) => transposeChars(view) },
+  { id: "toggle-comment", label: "Toggle Comment", execute: (view) => toggleComment(view) },
+  { id: "toggle-block-comment", label: "Toggle Block Comment", execute: (view) => toggleBlockComment(view) },
+  { id: "fold-code", label: "Fold Code", execute: (view) => foldCode(view) },
+  { id: "unfold-code", label: "Unfold Code", execute: (view) => unfoldCode(view) },
+  { id: "toggle-fold", label: "Toggle Fold", execute: (view) => toggleFold(view) },
+  { id: "fold-all", label: "Fold All", execute: (view) => foldAll(view) },
+  { id: "unfold-all", label: "Unfold All", execute: (view) => unfoldAll(view) },
+  { id: "start-completion", label: "Start Completion", execute: (view) => startCompletion(view) },
+  { id: "close-completion", label: "Close Completion", execute: (view) => closeCompletion(view) },
+  { id: "accept-completion", label: "Accept Completion", execute: (view) => acceptCompletion(view) },
   {
     id: "toggle-search-bar",
     label: "Toggle Search Bar",
@@ -44,6 +141,7 @@ const paletteActions: PaletteAction[] = [
       }
     },
   },
+  { id: "close-search", label: "Close Search", execute: (view) => closeSearchPanel(view) },
 ];
 
 function createSearchQueryFromValue(view: EditorView, searchValue: string): SearchQuery {
