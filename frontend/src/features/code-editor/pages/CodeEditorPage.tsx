@@ -2,7 +2,6 @@ import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, ArrowLeft, Upload, Download, FolderOpen, FolderPlus, SquareTerminal, FilePlus2, PencilLine, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
-
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,11 +14,13 @@ import { CodeEditor } from "@/components/editor/CodeEditor";
 import { CodeExplorerTree } from "@/features/code-editor/components/CodeExplorerTree";
 import { FilePreview } from "@/features/code-editor/components/FilePreview";
 import { EditorTabBar } from "@/components/editor/EditorTabBar";
+import { LanguageSelector } from "@/features/code-editor/components/LanguageSelector";
 import { platformApi } from "@/features/platform/api";
 import { env } from "@/app/env";
 import { useAuthStore } from "@/stores/authStore";
 import { useEditorTabStore } from "@/stores/editorTabStore";
 import { TerminalEmulator } from "@/features/terminal/components/TerminalEmulator";
+import { detectLanguageFromPath, getLanguageById } from "@/features/code-editor/languages/languageRegistry";
 
 type ContextTarget = { path: string; name: string; isDir: boolean };
 
@@ -115,7 +116,10 @@ export function CodeEditorPage() {
     onError: () => toast.error("Upload failed"),
   });
 
-  const selectedLanguage = React.useMemo(() => detectLanguage(activeTab?.filePath ?? ""), [activeTab?.filePath]);
+  const selectedLanguage = React.useMemo(
+    () => getLanguageById(activeTab?.language ?? detectLanguageFromPath(activeTab?.filePath ?? "").id),
+    [activeTab?.filePath, activeTab?.language]
+  );
   const isDirty = !!activeTab && !isPreviewable(activeTab.filePath) && activeTab.isDirty;
 
   const openUploadForPath = React.useCallback((path: string, includeFolder = false) => {
@@ -318,9 +322,7 @@ export function CodeEditorPage() {
                         }}
                         onOpenFile={(item) => {
                           const isPreview = isPreviewable(item.path);
-                          const lang = isPreview
-                            ? (item.path.split('.').pop()?.toLowerCase() ?? 'text')
-                            : detectLanguage(item.path);
+                          const lang = detectLanguageFromPath(item.path).id;
 
                           const existingTab = tabs.find(t => t.filePath === item.path);
                           addTab({
@@ -362,12 +364,22 @@ export function CodeEditorPage() {
                           <div className="flex h-full min-h-0 flex-col">
                             <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
                               <span className="truncate">Editing {activeTab.fileName}</span>
-                              <span>
-                                {selectedLanguage.toUpperCase()} {isDirty ? "• unsaved" : "• saved"}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <LanguageSelector
+                                  value={selectedLanguage.id}
+                                  onChange={(nextLanguageId) => updateTab(activeTab.id, { language: nextLanguageId })}
+                                />
+                                <span>
+                                  {isDirty ? "• unsaved" : "• saved"}
+                                </span>
+                              </div>
                             </div>
                             <div className="min-h-0 flex-1 overflow-hidden">
-                              <CodeEditor value={activeTab.content} onChange={(v) => updateTab(activeTab.id, { content: v, isDirty: true })} language={selectedLanguage} />
+                              <CodeEditor
+                                value={activeTab.content}
+                                onChange={(v) => updateTab(activeTab.id, { content: v, isDirty: true })}
+                                language={selectedLanguage.id}
+                              />
                             </div>
                           </div>
                         ) : (
@@ -448,7 +460,7 @@ export function CodeEditorPage() {
           onClick={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { const isPreview = isPreviewable(contextMenu.item.path); const lang = isPreview ? (contextMenu.item.path.split('.').pop()?.toLowerCase() ?? 'text') : detectLanguage(contextMenu.item.path); const existingTab = tabs.find(t => t.filePath === contextMenu.item.path); addTab({ id: `tab-${contextMenu.item.path}`, filePath: contextMenu.item.path, fileName: contextMenu.item.name, language: lang, isDirty: false, content: "" }); if (!isPreview && !existingTab) { readFile.mutate(contextMenu.item.path); } setContextMenu(null); }}>
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { const isPreview = isPreviewable(contextMenu.item.path); const lang = detectLanguageFromPath(contextMenu.item.path).id; const existingTab = tabs.find(t => t.filePath === contextMenu.item.path); addTab({ id: `tab-${contextMenu.item.path}`, filePath: contextMenu.item.path, fileName: contextMenu.item.name, language: lang, isDirty: false, content: "" }); if (!isPreview && !existingTab) { readFile.mutate(contextMenu.item.path); } setContextMenu(null); }}>
             <ArrowLeft className="size-4" /> Open
           </button>
           <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-muted" onClick={() => { setContextMenu(null); openRenameDialog(contextMenu.item); }}>
@@ -525,36 +537,4 @@ function handleDownload(path: string, token?: string | null) {
   a.target = "_blank";
   a.rel = "noopener";
   a.click();
-}
-function detectLanguage(path: string) {
-  const normalized = path.replace(/\\/g, "/").toLowerCase();
-  const base = normalized.split("/").pop() ?? "";
-  if (base === "package.json" || base === "tsconfig.json" || base === "jsconfig.json" || base === ".eslintrc" || base === ".prettierrc") return "json";
-  if (base === ".gitignore" || base.endsWith(".gitignore")) return "gitignore";
-  if (base.endsWith(".sh") || base.endsWith(".bash") || base.endsWith(".zsh") || base.endsWith(".ps1") || base.endsWith(".cmd") || base.endsWith(".bat")) return "shell";
-  const ext = base.split(".").pop() ?? "";
-  if (["ts", "tsx"].includes(ext)) return "typescript";
-  if (["js", "jsx"].includes(ext)) return "javascript";
-  if (["json"].includes(ext)) return "json";
-  if (["md"].includes(ext)) return "markdown";
-  if (["py"].includes(ext)) return "python";
-  if (["java", "class"].includes(ext)) return "java";
-  if (["php"].includes(ext)) return "php";
-  if (["go"].includes(ext)) return "go";
-  if (["rs"].includes(ext)) return "rust";
-  if (["c", "h", "C", "H"].includes(ext)) return "c";
-  if (["cpp", "hpp", "C++"].includes(ext)) return "cpp";
-  if (["cs"].includes(ext)) return "csharp";
-  if (["rb"].includes(ext)) return "ruby";
-  if (["Dockerfile"].includes(ext)) return "dockerfile";
-  if (["ini"].includes(ext)) return "ini";
-  if (["env"].includes(ext)) return "dotenv";
-  if (["log"].includes(ext)) return "log";
-  if (["dockercompose", "yaml", "yml"].includes(ext)) return "yaml";
-  if (["css", "scss"].includes(ext)) return "css";
-  if (["html", "htm"].includes(ext)) return "html";
-  if (["yml", "yaml"].includes(ext)) return "yaml";
-  if (["xml", "svg"].includes(ext)) return "xml";
-  if (["sql"].includes(ext)) return "sql";
-  return "text";
 }

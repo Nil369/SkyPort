@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useEditorTabStore } from '@/stores/editorTabStore';
 import { Button } from '@/components/ui/button';
 import { X, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getTechStackIcon } from '@/lib/techStackIcons';
+import { getLanguageById } from '@/features/code-editor/languages/languageRegistry';
+import { BrandLanguageIcon } from '@/features/code-editor/components/BrandLanguageIcon';
 
 interface EditorTabBarProps {
   onTabChange?: (filePath: string | null) => void;
@@ -11,7 +12,9 @@ interface EditorTabBarProps {
 }
 
 export function EditorTabBar({ onTabChange, onNewFile }: EditorTabBarProps) {
-  const { tabs, activeTabId, closeTab, closeAllTabs, closeOtherTabs, setActiveTab } = useEditorTabStore();
+  const { tabs, activeTabId, closeTab, closeAllTabs, closeOtherTabs, setActiveTab, reorderTabs } = useEditorTabStore();
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const handleTabClick = (tabId: string) => {
     setActiveTab(tabId);
@@ -22,6 +25,35 @@ export function EditorTabBar({ onTabChange, onNewFile }: EditorTabBarProps) {
   const handleCloseTab = (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     closeTab(tabId);
+  };
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== dropIndex) {
+      reorderTabs(draggedIndex, dropIndex);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   };
 
   const handleContextMenu = (e: React.MouseEvent, tabId: string) => {
@@ -59,21 +91,32 @@ export function EditorTabBar({ onTabChange, onNewFile }: EditorTabBarProps) {
   if (tabs.length === 0) return null;
 
   const getLanguageIcon = (lang: string) => {
-    return getTechStackIcon(lang, 'h-3.5 w-3.5');
+    const language = getLanguageById(lang);
+    return <BrandLanguageIcon iconSlug={language.iconSlug} className="h-3.5 w-3.5" title={language.label} />;
   };
 
   return (
     <div className="flex items-center gap-0.5 border-b border-border/60 bg-muted/30 px-1 py-1 overflow-x-auto">
-      {tabs.map(tab => {
+      {tabs.map((tab, index) => {
         const isActive = tab.id === activeTabId;
+        const isDragging = draggedIndex === index;
+        const isDragOver = dragOverIndex === index;
 
         return (
           <button
             key={tab.id}
+            draggable
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, index)}
+            onDragEnd={handleDragEnd}
             onClick={() => handleTabClick(tab.id)}
             onContextMenu={(e) => handleContextMenu(e, tab.id)}
             className={cn(
-              'group relative flex items-center gap-2 rounded-t px-3 py-2 text-xs whitespace-nowrap transition-all',
+              'group relative flex items-center gap-2 rounded-t px-3 py-2 text-xs whitespace-nowrap transition-all cursor-move',
+              isDragging && 'opacity-50',
+              isDragOver && 'border-l-2 border-l-primary bg-muted',
               isActive
                 ? 'border-b-2 border-b-primary bg-background text-foreground shadow-sm'
                 : 'border-b-2 border-b-transparent bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'

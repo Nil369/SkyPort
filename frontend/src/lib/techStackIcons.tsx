@@ -6,6 +6,11 @@ import type { IconName } from 'tech-stack-icons';
  * Maps file extensions and language names to their tech stack icon names
  */
 const LANGUAGE_TECH_STACK_MAP: Record<string, IconName | null> = {
+  // CodeMirror registry IDs
+  'clike': 'cplusplus' as IconName,
+  'htmlmixed': 'html5' as IconName,
+  'stex': 'latex' as IconName,
+
   // JavaScript/TypeScript
   'js': 'javascript' as IconName,
   'jsx': 'javascript' as IconName,
