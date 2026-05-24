@@ -19,6 +19,7 @@ interface EditorTabState {
   closeOtherTabs: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   updateTab: (tabId: string, updates: Partial<EditorTab>) => void;
+  reorderTabs: (fromIndex: number, toIndex: number) => void;
   getActiveTab: () => EditorTab | undefined;
   getTabByPath: (filePath: string) => EditorTab | undefined;
 }
@@ -78,6 +79,17 @@ export const useEditorTabStore = create<EditorTabState>((set, get) => ({
     const state = get();
     return state.tabs.find(t => t.id === state.activeTabId);
   },
+
+  reorderTabs: (fromIndex, toIndex) =>
+    set((state) => {
+      if (fromIndex < 0 || toIndex < 0 || fromIndex >= state.tabs.length || toIndex >= state.tabs.length) {
+        return state;
+      }
+      const newTabs = [...state.tabs];
+      const [movedTab] = newTabs.splice(fromIndex, 1);
+      newTabs.splice(toIndex, 0, movedTab);
+      return { tabs: newTabs };
+    }),
 
   getTabByPath: (filePath) => {
     const state = get();
