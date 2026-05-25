@@ -1,6 +1,13 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Cpu, ExternalLink, HardDrive, Play, RotateCcw, ScrollText, Search, Square, Trash2, X } from "lucide-react";
+import { Activity, Cpu, ExternalLink, HardDrive, Play, RotateCcw, ScrollText, Search, Square, Trash2, X, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import toast from "react-hot-toast";
 
 import { PageShell } from "@/components/layout/PageShell";
@@ -261,28 +268,36 @@ export function ProcessManagerPage() {
           <CardTitle className="font-mono text-base tracking-tight">Deploy via PM2 (host)</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 pt-4 sm:grid-cols-2 lg:grid-cols-4">
-          <select
-            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-            value={projectId}
-            onChange={(e) => {
-              const nextId = e.target.value;
-              setProjectId(nextId);
-              pm2AutofillKey.current = "";
-              setStartCmd("");
-              setWorkingDir("");
-              setPort("");
-              if (!nextId) {
-                setEnvText("");
-              }
-            }}
-          >
-            <option value="">Select project</option>
-            {(projects.data ?? []).map((p) => (
-              <option value={p.id} key={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="cursor-pointer h-9 w-full flex items-center justify-between rounded-lg border border-input bg-background px-3 text-sm"
+                disabled={projects.isLoading}
+                aria-label="Select project"
+              >
+                <span className="truncate">
+                  {projectId
+                    ? (projects.data ?? []).find((p) => String(p.id) === projectId)?.name
+                    : projects.isLoading
+                    ? 'Loading projects...'
+                    : 'Select project'
+                  }
+                </span>
+                <ChevronDown className="ml-2" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => { setProjectId(''); pm2AutofillKey.current = ''; setStartCmd(''); setWorkingDir(''); setPort(''); setEnvText(''); }}>
+                Select project
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {(projects.data ?? []).map((p) => (
+                <DropdownMenuItem className="cursor-pointer" key={p.id} onClick={() => { setProjectId(String(p.id)); pm2AutofillKey.current = ''; setStartCmd(''); setWorkingDir(''); setPort(''); setEnvText(''); }}>
+                  {p.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Input placeholder="Start command" value={startCmd} onChange={(e) => setStartCmd(e.target.value)} />
           <Input placeholder="Working directory (optional)" value={workingDir} onChange={(e) => setWorkingDir(e.target.value)} />
           <Input placeholder="Port (optional)" value={port} onChange={(e) => setPort(e.target.value)} />

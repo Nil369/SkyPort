@@ -130,6 +130,91 @@ export function parseEnvTextSimple(raw: string): Record<string, string> | undefi
 }
 
 /**
+ * Parses environment lines from markdown or plain text.
+ * Accepts explicit ENV declarations, export assignments, KEY=VALUE, and JSON objects.
+ */
+export function parseEnvTextStrict(raw: string): Record<string, string> | undefined {
+  if (!raw || typeof raw !== "string") return undefined;
+
+  const result: Record<string, string> = {};
+  const lines = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+
+  for (const originalLine of lines) {
+    const line = originalLine.trim();
+    if (!line) continue;
+
+    const stripped = stripMarkdownPrefix(line);
+
+    const envMatch = stripped.match(/^ENV\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/i);
+    if (envMatch) {
+      const v = unquoteEnvValue(envMatch[2]);
+      if (isLikelyCommentOrNoise(v)) continue;
+      result[envMatch[1]] = v;
+      continue;
+    }
+
+    const exportMatch = stripped.match(/^export\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/i);
+    if (exportMatch) {
+      result[exportMatch[1]] = unquoteEnvValue(exportMatch[2]);
+      continue;
+    }
+
+    const kvMatch = stripped.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/);
+    if (kvMatch) {
+      const v = unquoteEnvValue(kvMatch[2]);
+      if (isLikelyCommentOrNoise(v)) continue;
+      result[kvMatch[1]] = v;
+      continue;
+    }
+
+    if (stripped.startsWith("{") && stripped.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          for (const [key, value] of Object.entries(parsed)) {
+            if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+              result[key] = String(value ?? "");
+            }
+          }
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function stripMarkdownPrefix(line: string) {
+  return line
+    .replace(/^>\s?/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^\d+\.\s+/, "")
+    .trim();
+}
+
+function unquoteEnvValue(value: string) {
+  const trimmed = value.trim();
+  // Remove surrounding single/double quotes
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function isLikelyCommentOrNoise(v: string) {
+  if (!v) return true;
+  const t = v.trim();
+  // values that start with a comment marker or look like SQL/snippets are noise
+  if (t.startsWith('#')) return true;
+  if (t.startsWith('//')) return true;
+  if (/^\s*select\s+/i.test(t)) return true;
+  if (/;\s*$/.test(t)) return true;
+  return false;
+}
+
+/**
  * Sanitizes environment variable text for storage/display
  * Removes duplicates, normalizes line endings, trims whitespace
  * @param raw Raw environment text

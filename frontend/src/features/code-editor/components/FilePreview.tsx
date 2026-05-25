@@ -122,7 +122,7 @@ export function FilePreview({ url, path, onDownload }: PreviewProps) {
 
   if (ext === "ppt") {
     return (
-      <PreviewWrapper className="items-center justify-center p-8" loading={loading} error={error} onDownload={onDownload}>
+      <div className="flex h-full items-center justify-center p-8">
         <div className="flex max-w-md flex-col items-center gap-4 text-center">
           <div className="rounded-full bg-orange-500/10 p-4">
             <FileIcon className="h-12 w-12 text-orange-500" />
@@ -130,7 +130,7 @@ export function FilePreview({ url, path, onDownload }: PreviewProps) {
           <div>
             <h3 className="text-lg font-medium">Legacy .ppt format</h3>
             <p className="text-sm text-muted-foreground">
-              Binary PowerPoint (.ppt) cannot be previewed in the browser. Convert to .pptx or download the file.
+              Binary PowerPoint (.ppt) cannot be previewed directly in the browser. Convert to .pptx or download the file.
             </p>
           </div>
           <Button onClick={onDownload}>
@@ -138,7 +138,7 @@ export function FilePreview({ url, path, onDownload }: PreviewProps) {
             Download
           </Button>
         </div>
-      </PreviewWrapper>
+      </div>
     );
   }
 
