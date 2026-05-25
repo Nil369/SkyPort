@@ -73,7 +73,7 @@ export function CaddyStatusCard({
   return (
     <Card className="relative overflow-hidden">
       {/* Top accent bar */}
-      <div className={`h-1 w-full ${installed ? "bg-emerald-500" : "bg-amber-500"}`} />
+      <div className={`h-1 w-full ${installed ? "bg-linear-to-r from-blue-500 to-indigo-600" : "bg-linear-to-r from-amber-500 to-orange-600"}`} />
 
       <CardHeader>
         <div className="flex items-start justify-between">

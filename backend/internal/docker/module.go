@@ -1,10 +1,14 @@
 package docker
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -28,6 +32,7 @@ func (m *Module) Register(a *app.App) error {
 		return nil
 	}
 	a.Fiber.Get("/api/v1/docker/status", dockerStatusHandler())
+	a.Fiber.Get("/api/v1/docker/hub/tags", dockerHubTagsHandler())
 	a.Fiber.Post("/api/v1/docker/install", dockerInstallHandler())
 	a.Fiber.Post("/api/v1/docker/start", dockerStartHandler())
 	a.Fiber.Post("/api/v1/docker/stop", dockerStopHandler())
@@ -36,12 +41,15 @@ func (m *Module) Register(a *app.App) error {
 	a.Fiber.Get("/api/v1/docker/images", listImagesHandler())
 	a.Fiber.Delete("/api/v1/docker/image/:name", imageDeleteHandler())
 	a.Fiber.Post("/api/v1/docker/image/:name/run", imageRunHandler())
+	a.Fiber.Get("/api/v1/docker/image/:name/pull/stream", imagePullStreamHandler())
 	a.Fiber.Post("/api/v1/docker/images/prune", imagesPruneHandler())
+	a.Fiber.Get("/api/v1/docker/hub/repo", dockerHubRepoHandler())
 	a.Fiber.Get("/api/v1/docker/volumes", listVolumesHandler())
 	a.Fiber.Post("/api/v1/docker/volumes/create", volumeCreateHandler())
 	a.Fiber.Delete("/api/v1/docker/volume/:name", volumeDeleteHandler())
 	a.Fiber.Post("/api/v1/docker/volumes/prune", volumesPruneHandler())
 	a.Fiber.Get("/api/v1/docker/networks", listNetworksHandler())
+	a.Fiber.Post("/api/v1/docker/compose/deploy", dockerComposeDeployHandler())
 	a.Fiber.Post("/api/v1/docker/networks/prune", networksPruneHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/start", containerStartHandler())
 	a.Fiber.Post("/api/v1/docker/container/:name/stop", containerStopHandler())
@@ -225,6 +233,177 @@ func dockerInstallHandler() fiber.Handler {
 	}
 }
 
+// dockerHubTagsHandler proxies Docker Hub tag lookup to avoid browser CORS restrictions.
+// @Summary Docker Hub tags
+// @Tags Docker
+// @Description Returns a list of tags for a Docker Hub repository
+// @Produce json
+// @Param image query string true "Repository name, optionally namespace/repo"
+// @Success 200 {object} map[string]any
+// @Router /api/v1/docker/hub/tags [get]
+func dockerHubTagsHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		image := strings.TrimSpace(c.Query("image"))
+		if image == "" {
+			return response.Error(c, fiber.StatusBadRequest, "missing_image", "image query parameter is required")
+		}
+
+		namespace := "library"
+		repo := image
+		if parts := strings.SplitN(image, "/", 2); len(parts) == 2 {
+			namespace = strings.TrimSpace(parts[0])
+			repo = strings.TrimSpace(parts[1])
+		}
+
+		if namespace == "" || repo == "" {
+			return response.Error(c, fiber.StatusBadRequest, "invalid_image", "image must be in repo or namespace/repo form")
+		}
+
+		endpoint := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/%s/tags?page_size=25", url.PathEscape(namespace), url.PathEscape(repo))
+		req, err := http.NewRequestWithContext(c.UserContext(), http.MethodGet, endpoint, nil)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "docker_hub_request_failed", err.Error())
+		}
+		req.Header.Set("User-Agent", "SkyPort/1.0")
+
+		client := &http.Client{Timeout: 10 * time.Second}
+		res, err := client.Do(req)
+		if err != nil {
+			return response.Error(c, fiber.StatusBadGateway, "docker_hub_unreachable", err.Error())
+		}
+		defer res.Body.Close()
+
+		var payload struct {
+			Results []struct {
+				Name string `json:"name"`
+			} `json:"results"`
+		}
+		if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+			return response.Error(c, fiber.StatusBadGateway, "docker_hub_decode_failed", err.Error())
+		}
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			return response.Error(c, res.StatusCode, "docker_hub_request_failed", "docker hub returned an error")
+		}
+
+		tags := make([]string, 0, len(payload.Results))
+		for _, item := range payload.Results {
+			if name := strings.TrimSpace(item.Name); name != "" {
+				tags = append(tags, name)
+			}
+		}
+
+		return response.OK(c, fiber.Map{
+			"image": image,
+			"tags":  tags,
+		})
+	}
+}
+
+// dockerHubRepoHandler proxies repository metadata (description/full_description)
+// so the frontend can prefill envs and other helpful information.
+// @Summary Docker Hub repo
+// @Tags Docker
+// @Description Return repository metadata for a Docker Hub repository
+// @Produce json
+// @Param image query string true "Repository name, optionally namespace/repo"
+// @Success 200 {object} map[string]any
+// @Router /api/v1/docker/hub/repo [get]
+func dockerHubRepoHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		image := strings.TrimSpace(c.Query("image"))
+		if image == "" {
+			return response.Error(c, fiber.StatusBadRequest, "missing_image", "image query parameter is required")
+		}
+		namespace := "library"
+		repo := image
+		if parts := strings.SplitN(image, "/", 2); len(parts) == 2 {
+			namespace = strings.TrimSpace(parts[0])
+			repo = strings.TrimSpace(parts[1])
+		}
+		endpoint := fmt.Sprintf("https://hub.docker.com/v2/repositories/%s/%s/", url.PathEscape(namespace), url.PathEscape(repo))
+		req, err := http.NewRequestWithContext(c.UserContext(), http.MethodGet, endpoint, nil)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "docker_hub_request_failed", err.Error())
+		}
+		req.Header.Set("User-Agent", "SkyPort/1.0")
+		client := &http.Client{Timeout: 10 * time.Second}
+		res, err := client.Do(req)
+		if err != nil {
+			return response.Error(c, fiber.StatusBadGateway, "docker_hub_unreachable", err.Error())
+		}
+		defer res.Body.Close()
+		var payload map[string]any
+		if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+			return response.Error(c, fiber.StatusBadGateway, "docker_hub_decode_failed", err.Error())
+		}
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			return response.Error(c, res.StatusCode, "docker_hub_request_failed", "docker hub returned an error")
+		}
+		return response.OK(c, fiber.Map{"repo": payload})
+	}
+}
+
+// imagePullStreamHandler streams `docker pull` output as server-sent events.
+// Clients can connect with EventSource to receive live pull progress.
+func imagePullStreamHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		image := c.Params("name")
+		if dec, err := url.PathUnescape(image); err == nil && dec != "" {
+			image = dec
+		}
+		ctx := c.UserContext()
+
+		cmd, err := dockerCmd(ctx, "pull", image)
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "docker_not_found", err.Error())
+		}
+
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
+
+		// Start the command
+		if err := cmd.Start(); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "pull_start_failed", err.Error())
+		}
+
+		// Set SSE headers
+		c.Set("Content-Type", "text/event-stream")
+		c.Set("Cache-Control", "no-cache")
+		c.Set("Connection", "keep-alive")
+		// Note: fasthttp RequestCtx doesn't expose a Flush method here.
+		// We write events directly; the HTTP server will flush as appropriate.
+
+		reader := bufio.NewReader(io.MultiReader(stdout, stderr))
+		for {
+			line, err := reader.ReadString('\n')
+			if line != "" {
+				// Send SSE data event
+				safe := strings.TrimRight(line, "\r\n")
+				_, _ = c.WriteString("data: " + safe + "\n\n")
+				// intentionally no explicit flush here; write already sent
+			}
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				// non-EOF error: send as final error event and exit
+				_, _ = c.WriteString("event: error\ndata: " + err.Error() + "\n\n")
+				// intentionally no explicit flush here; write already sent
+				break
+			}
+		}
+
+		// Wait for command to finish
+		_ = cmd.Wait()
+
+		// Signal completion
+		_, _ = c.WriteString("event: done\ndata: done\n\n")
+		// intentionally no explicit flush here; final write completed
+
+		return nil
+	}
+}
+
 // dockerStartHandler starts the Docker daemon (Linux/Docker Desktop).
 // @Summary Start Docker daemon
 // @Tags Docker
@@ -283,6 +462,65 @@ func dockerStartHandler() fiber.Handler {
 			time.Sleep(2 * time.Second)
 		}
 		return response.Error(c, fiber.StatusInternalServerError, "start_verification_failed", "daemon start attempted but not ready; if on Windows run server as Administrator and ensure Docker Desktop is installed")
+	}
+}
+
+// dockerComposeDeployHandler accepts a docker-compose YAML and runs `docker compose -f <file> up -d`.
+// @Summary Deploy docker-compose
+// @Tags Docker
+// @Accept json
+// @Produce json
+// @Param request body map[string]string true "Compose payload"
+// @Success 200 {object} map[string]any
+// @Router /api/v1/docker/compose/deploy [post]
+func dockerComposeDeployHandler() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var body struct {
+			Compose     string `json:"compose"`
+			ProjectPath string `json:"project_path"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return response.Error(c, fiber.StatusBadRequest, "invalid_body", "failed to parse request body")
+		}
+		compose := strings.TrimSpace(body.Compose)
+		if compose == "" {
+			return response.Error(c, fiber.StatusBadRequest, "empty_compose", "compose content is required")
+		}
+
+		// Write compose content to a temp file
+		tmp, err := os.CreateTemp("", "skyport-compose-*.yml")
+		if err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "tempfile_failed", err.Error())
+		}
+		tmpPath := tmp.Name()
+		defer func() {
+			tmp.Close()
+			_ = os.Remove(tmpPath)
+		}()
+
+		if _, err := tmp.WriteString(compose); err != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "write_failed", err.Error())
+		}
+
+		ctx, cancel := context.WithTimeout(c.UserContext(), 4*time.Minute)
+		defer cancel()
+
+		// run `docker compose -f <tmp> up -d`
+		cmd, cmdErr := dockerCmd(ctx, "compose", "-f", tmpPath, "up", "-d")
+		if cmdErr != nil {
+			return response.Error(c, fiber.StatusInternalServerError, "docker_not_found", cmdErr.Error())
+		}
+
+		out, runErr := cmd.CombinedOutput()
+		if runErr != nil {
+			msg := strings.TrimSpace(string(out))
+			if msg == "" {
+				msg = runErr.Error()
+			}
+			return response.Error(c, fiber.StatusInternalServerError, "compose_failed", msg)
+		}
+
+		return response.OK(c, fiber.Map{"status": "ok", "output": strings.TrimSpace(string(out))})
 	}
 }
 
@@ -379,17 +617,17 @@ func dockerDaemonHandler() fiber.Handler {
 
 // containerInfo represents Docker container information
 type containerInfo struct {
-	ID            string `json:"id"`
-	Names         string `json:"names"`
-	Image         string `json:"image"`
-	Status        string `json:"status"`
-	Ports         string `json:"ports"`
-	State         string `json:"state"`
-	Created       string `json:"created"`
-	Context       string `json:"context,omitempty"`
-	Mounts        string `json:"mounts,omitempty"`
-	Networks      string `json:"networks,omitempty"`
-	LocalVolumes  string `json:"local_volumes,omitempty"`
+	ID           string `json:"id"`
+	Names        string `json:"names"`
+	Image        string `json:"image"`
+	Status       string `json:"status"`
+	Ports        string `json:"ports"`
+	State        string `json:"state"`
+	Created      string `json:"created"`
+	Context      string `json:"context,omitempty"`
+	Mounts       string `json:"mounts,omitempty"`
+	Networks     string `json:"networks,omitempty"`
+	LocalVolumes string `json:"local_volumes,omitempty"`
 }
 
 type commitRequest struct {
@@ -553,6 +791,9 @@ func dockerContextShow(ctx context.Context) string {
 func containerStartHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 
 		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
 		defer cancel()
@@ -579,6 +820,9 @@ func containerStartHandler() fiber.Handler {
 func containerStopHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 
 		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
 		defer cancel()
@@ -605,6 +849,9 @@ func containerStopHandler() fiber.Handler {
 func containerRestartHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 
 		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
 		defer cancel()
@@ -631,6 +878,9 @@ func containerRestartHandler() fiber.Handler {
 func containerDeleteHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 
 		ctx, cancel := context.WithTimeout(c.UserContext(), 5*time.Second)
 		defer cancel()
@@ -659,6 +909,9 @@ func containerDeleteHandler() fiber.Handler {
 func containerCommitHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 		var req commitRequest
 		if err := validator.ParseAndValidate(c, &req); err != nil {
 			return err
@@ -740,6 +993,9 @@ func listImagesHandler() fiber.Handler {
 func imageDeleteHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		name := c.Params("name")
+		if dec, err := url.PathUnescape(name); err == nil && dec != "" {
+			name = dec
+		}
 		ctx, cancel := context.WithTimeout(c.UserContext(), 10*time.Second)
 		defer cancel()
 		if _, err := runDocker(ctx, "rmi", "-f", name); err != nil {
@@ -762,6 +1018,13 @@ func imageDeleteHandler() fiber.Handler {
 func imageRunHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		image := c.Params("name")
+		// URL-decode the path parameter in case the frontend encoded characters
+		// like ':' or '/' (e.g. "postgres%3Alatest") which would otherwise
+		// be passed verbatim to the docker CLI and produce an invalid
+		// reference format error. Prefer PathUnescape for path segments.
+		if dec, err := url.PathUnescape(image); err == nil && dec != "" {
+			image = dec
+		}
 		var req imageRunRequest
 		_ = c.BodyParser(&req)
 		if req.Port != 0 {
@@ -999,10 +1262,10 @@ func networksPruneHandler() fiber.Handler {
 }
 
 type volInspect struct {
-	CreatedAt   string
-	Mountpoint  string
-	RefCount    int
-	SizeBytes   int64
+	CreatedAt  string
+	Mountpoint string
+	RefCount   int
+	SizeBytes  int64
 }
 
 func volumeInspectMap(ctx context.Context, names []string) map[string]volInspect {

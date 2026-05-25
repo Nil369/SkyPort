@@ -1,7 +1,14 @@
 import React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { ScrollText, Info } from 'lucide-react'
+import { ScrollText, Info, ChevronDown } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 
 import { PageShell } from '@/components/layout/PageShell'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -239,25 +246,35 @@ export const DeploymentsPage: React.FC = () => {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Project
               </label>
-              <select
-                value={projectId}
-                onChange={(e) => {
-                  setProjectId(e.target.value)
-                  setPort('')
-                  setStartCmd('')
-                  setWorkingDir('')
-                  setStrategy('docker')
-                }}
-                disabled={projects.isLoading}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm disabled:opacity-50"
-              >
-                <option value="">{projects.isLoading ? 'Loading projects...' : 'Select project'}</option>
-                {(projects.data ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    disabled={projects.isLoading}
+                    className="h-10 w-full flex items-center justify-between px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm disabled:opacity-50"
+                  >
+                    <span className="truncate">
+                      {projectId
+                        ? (projects.data ?? []).find((p) => p.id === Number(projectId))?.name
+                        : projects.isLoading
+                        ? 'Loading projects...'
+                        : 'Select project'
+                      }
+                    </span>
+                    <ChevronDown className="ml-2" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => { setProjectId(''); setPort(''); setStartCmd(''); setWorkingDir(''); setStrategy('docker'); }}>
+                    Select project
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {(projects.data ?? []).map((p) => (
+                    <DropdownMenuItem className="cursor-pointer" key={p.id} onClick={() => { setProjectId(String(p.id)); setPort(''); setStartCmd(''); setWorkingDir(''); setStrategy('docker'); }}>
+                      {p.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               {(projects.data?.length ?? 0) === 0 && !projects.isLoading && (
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">No projects found</p>
               )}
@@ -266,15 +283,19 @@ export const DeploymentsPage: React.FC = () => {
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                 Strategy
               </label>
-              <select
-                value={strategy}
-                onChange={(e) => setStrategy(e.target.value as any)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
-              >
-                <option value="docker">Docker</option>
-                <option value="pm2">PM2</option>
-                <option value="native">Native</option>
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="w-full h-10 flex items-center justify-between px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm">
+                    <span className="capitalize">{strategy}</span>
+                    <ChevronDown className="ml-2" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => setStrategy('docker')}>Docker</DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => setStrategy('pm2')}>PM2</DropdownMenuItem>
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => setStrategy('native')}>Native</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">

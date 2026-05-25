@@ -1,5 +1,12 @@
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -209,19 +216,29 @@ export function DomainForm({
               {/* Project Selector */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Associated Project</label>
-                <select
-                  className="w-full h-10 rounded-lg border border-input bg-background px-3 text-sm"
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  disabled={submitting}
-                >
-                  <option value="">No project (optional)</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      disabled={submitting}
+                      className="w-full h-10 flex items-center justify-between rounded-lg border border-input bg-background px-3 text-sm cursor-pointer"
+                      aria-label="Select project"
+                    >
+                      <span className="truncate text-sm">
+                        {projectId ? projects.find((p) => String(p.id) === projectId)?.name : 'No project (optional)'}
+                      </span>
+                      <ChevronDown className="ml-2" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setProjectId('')}>No project (optional)</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {projects.map((p) => (
+                      <DropdownMenuItem key={p.id} className="cursor-pointer" onClick={() => setProjectId(String(p.id))}>
+                        {p.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           )}

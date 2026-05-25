@@ -381,6 +381,10 @@ export const platformApi = {
 
   dockerStatus: async () =>
     (await http.get<{ installed: boolean; daemon_running: boolean; version?: string }>("/docker/status")).data,
+  dockerHubTags: async (image: string) =>
+    (await http.get<{ image: string; tags: string[] }>("/docker/hub/tags", { params: { image } })).data,
+  dockerHubRepo: async (image: string) =>
+    (await http.get<{ repo: any }>("/docker/hub/repo", { params: { image } })).data,
   listContainers: async () =>
     (await http.get<{ containers: DockerContainer[] }>("/docker/containers")).data,
   listImages: async () => (await http.get<{ images: DockerImage[] }>("/docker/images")).data,
@@ -509,6 +513,8 @@ export const platformApi = {
     working_directory?: string;
   }) => (await http.post<GitHubImportPreview>("/github/import", input)).data,
   githubDisconnect: async () => (await http.post("/github/disconnect", {})).data,
+  composeDeploy: async (compose: string, projectPath?: string) =>
+    (await http.post<{ status: string; output?: string }>("/docker/compose/deploy", { compose, project_path: projectPath })).data,
   // Convert a file on the server using LibreOffice (soffice)
   convertFile: async (path: string, to: string, saveAs?: string) =>
     (await http.post<{ preview?: string; content_type?: string; filename?: string; path?: string }>("/files/convert", { path, to, save_as: saveAs })).data,

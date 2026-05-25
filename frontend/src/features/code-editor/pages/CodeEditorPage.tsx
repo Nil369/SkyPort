@@ -21,6 +21,13 @@ import { useAuthStore } from "@/stores/authStore";
 import { useEditorTabStore } from "@/stores/editorTabStore";
 import { TerminalEmulator } from "@/features/terminal/components/TerminalEmulator";
 import { detectLanguageFromPath, getLanguageById } from "@/features/code-editor/languages/languageRegistry";
+import { Check, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem
+} from "@/components/ui/dropdown-menu";
 
 type ContextTarget = { path: string; name: string; isDir: boolean };
 
@@ -160,7 +167,7 @@ export function CodeEditorPage() {
           <CardTitle>Select project</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
-          <select
+          {/* <select
             className="h-9 min-w-80 rounded-lg border border-input bg-background px-3 text-sm"
             value={projectPath}
             onChange={(e) => {
@@ -179,7 +186,107 @@ export function CodeEditorPage() {
                 {p.name} ({p.path})
               </option>
             ))}
-          </select>
+          </select> */}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="min-w-80 cursor-pointer justify-between"
+              >
+                <span className="truncate">
+                  {projectPath
+                    ? (() => {
+                      const project =
+                        projects.data?.find(
+                          (p) =>
+                            p.path ===
+                            projectPath
+                        );
+
+                      return project
+                        ? `${project.name} (${project.path})`
+                        : projectPath;
+                    })()
+                    : "Choose project"}
+                </span>
+
+                <ChevronDown className="ml-2 size-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent
+              align="start"
+              className="w-105"
+            >
+              {(projects.data ?? []).length ===
+                0 ? (
+                <DropdownMenuItem disabled>
+                  No projects found
+                </DropdownMenuItem>
+              ) : (
+                (projects.data ?? []).map(
+                  (p) => {
+                    const isActive =
+                      projectPath ===
+                      p.path;
+
+                    return (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => {
+                          setProjectPath(
+                            p.path
+                          );
+
+                          setExplorerRoot(
+                            p.path
+                          );
+
+                          setActiveDirPath(
+                            p.path
+                          );
+
+                          setCustomPath(
+                            p.path
+                          );
+
+                          closeAllTabs();
+
+                          setTerminalOpen(
+                            false
+                          );
+                        }}
+                        className={`flex cursor-pointer items-center justify-between gap-3 rounded-md transition-colors ${isActive
+                            ? "bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                            : ""
+                          }`}
+                      >
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium">
+                            {p.name}
+                          </span>
+
+                          <span
+                            className={`truncate text-xs ${isActive
+                                ? "text-blue-100"
+                                : "text-muted-foreground"
+                              }`}
+                          >
+                            {p.path}
+                          </span>
+                        </div>
+
+                        {isActive ? (
+                          <Check className="size-4 shrink-0 text-white" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    );
+                  }
+                )
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Input
             className="min-w-80"
             placeholder="Or enter custom absolute path"
